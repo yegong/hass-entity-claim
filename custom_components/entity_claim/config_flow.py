@@ -269,7 +269,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 await self.async_set_unique_id(target_entity_id)
                 self._abort_if_unique_id_mismatch()
                 if not requesters:
-                    return self._show_remove_menu(target_entity_id)
+                    return await self.async_step_remove_confirm()
                 data = _entry_data(target_entity_id, user_input, requesters)
                 return self.async_update_reload_and_abort(
                     entry, data_updates=data
@@ -284,6 +284,14 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "error_detail": detail,
             },
         )
+
+    async def async_step_remove_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the explicit removal confirmation."""
+
+        entry = self._get_reconfigure_entry()
+        return self._show_remove_menu(entry.data[CONF_TARGET_ENTITY_ID])
 
     async def async_step_remove_entry(
         self, user_input: dict[str, Any] | None = None
@@ -342,7 +350,7 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
             else:
                 assert requesters is not None
                 if not requesters:
-                    return self._show_remove_menu(target_entity_id)
+                    return await self.async_step_remove_confirm()
                 data = _entry_data(target_entity_id, user_input, requesters)
                 return self._save(data)
 
@@ -354,6 +362,15 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
                 "target_entity_id": target_entity_id,
                 "error_detail": detail,
             },
+        )
+
+    async def async_step_remove_confirm(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Show the explicit removal confirmation."""
+
+        return self._show_remove_menu(
+            self.config_entry.data[CONF_TARGET_ENTITY_ID]
         )
 
     async def async_step_remove_entry(

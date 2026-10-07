@@ -1,5 +1,6 @@
 """Tests for integration metadata that do not require Home Assistant."""
 
+import ast
 import json
 from pathlib import Path
 import unittest
@@ -55,6 +56,22 @@ class MetadataTests(unittest.TestCase):
         )
         self.assertIn('menu_options=["remove_entry"]', source)
         self.assertNotIn("keep_empty", source)
+
+        classes = {
+            node.name: {
+                child.name
+                for child in node.body
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            for node in ast.parse(source).body
+            if isinstance(node, ast.ClassDef)
+        }
+        for class_name in (
+            "EntityClaimConfigFlow",
+            "EntityClaimOptionsFlow",
+        ):
+            self.assertIn("async_step_remove_confirm", classes[class_name])
+            self.assertIn("async_step_remove_entry", classes[class_name])
 
         with (INTEGRATION_DIR / "strings.json").open(encoding="utf-8") as file:
             strings = json.load(file)
