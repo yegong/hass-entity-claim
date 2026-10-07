@@ -29,18 +29,27 @@
           "aggregation_policy": "How the current Boolean claims are combined.",
           "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
         }
+      },
+      "remove_confirm": {
+        "title": "Remove Entity Claim?",
+        "description": "`{target_entity_id}` will no longer be managed. All Claim Entities and the diagnostic sensor created by this configuration will be removed. The Source Entity will not be deleted.",
+        "menu_options": {
+          "remove_entry": "Remove Entity Claim"
+        }
       }
     },
     "error": {
       "target_not_found": "The selected source entity is not currently available.",
       "unsupported_domain": "Only fan, light, and switch source entities are currently supported.",
       "claim_cannot_be_target": "A Claim Entity cannot be managed as a source entity.",
+      "requester_required": "Add at least one requester.",
       "invalid_requesters": "One or more requester names could not be used. See the detail above.",
       "entity_id_conflict": "A generated Entity ID is already occupied. The conflicting ID is shown above; remove or rename that entity and try again."
     },
     "abort": {
       "already_configured": "This source entity is already managed by Entity Claim.",
-      "reconfigure_successful": "Entity Claim configuration updated."
+      "reconfigure_successful": "Entity Claim configuration updated.",
+      "removed": "Entity Claim configuration removed."
     }
   },
   "options": {
@@ -57,6 +66,13 @@
           "aggregation_policy": "How the current Boolean claims are combined.",
           "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
         }
+      },
+      "remove_confirm": {
+        "title": "Remove Entity Claim?",
+        "description": "`{target_entity_id}` will no longer be managed. All Claim Entities and the diagnostic sensor created by this configuration will be removed. The Source Entity will not be deleted.",
+        "menu_options": {
+          "remove_entry": "Remove Entity Claim"
+        }
       }
     },
     "error": {
@@ -65,6 +81,9 @@
       "claim_cannot_be_target": "A Claim Entity cannot be managed as a source entity.",
       "invalid_requesters": "One or more requester names could not be used. See the detail above.",
       "entity_id_conflict": "A generated Entity ID is already occupied. The conflicting ID is shown above; remove or rename that entity and try again."
+    },
+    "abort": {
+      "removed": "Entity Claim configuration removed."
     }
   },
   "selector": {

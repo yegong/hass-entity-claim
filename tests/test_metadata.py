@@ -49,6 +49,22 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("async_get_options_flow", source)
         self.assertIn("OptionsFlowWithReload", source)
 
+    def test_empty_reconfigure_offers_only_removal(self) -> None:
+        source = (INTEGRATION_DIR / "config_flow.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('menu_options=["remove_entry"]', source)
+        self.assertNotIn("keep_empty", source)
+
+        with (INTEGRATION_DIR / "strings.json").open(encoding="utf-8") as file:
+            strings = json.load(file)
+        for flow in ("config", "options"):
+            remove_step = strings[flow]["step"]["remove_confirm"]
+            self.assertEqual(
+                remove_step["menu_options"],
+                {"remove_entry": "Remove Entity Claim"},
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

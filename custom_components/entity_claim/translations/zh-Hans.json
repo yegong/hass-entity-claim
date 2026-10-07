@@ -29,18 +29,27 @@
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
           "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
         }
+      },
+      "remove_confirm": {
+        "title": "删除 Entity Claim？",
+        "description": "将停止管理 `{target_entity_id}`，并删除此配置创建的所有 Claim Entity 和诊断传感器。Source Entity 不会被删除。",
+        "menu_options": {
+          "remove_entry": "删除 Entity Claim"
+        }
       }
     },
     "error": {
       "target_not_found": "当前找不到所选 Source Entity。",
       "unsupported_domain": "当前仅支持 fan、light 和 switch Source Entity。",
       "claim_cannot_be_target": "不能将 Claim Entity 作为 Source Entity 管理。",
+      "requester_required": "请至少添加一个 requester。",
       "invalid_requesters": "一个或多个 requester 名称无法使用，请查看上方详情。",
       "entity_id_conflict": "生成的 Entity ID 已被占用。冲突 ID 显示在上方；请先删除或重命名冲突实体，然后重试。"
     },
     "abort": {
       "already_configured": "该 Source Entity 已由 Entity Claim 管理。",
-      "reconfigure_successful": "Entity Claim 配置已更新。"
+      "reconfigure_successful": "Entity Claim 配置已更新。",
+      "removed": "Entity Claim 配置已删除。"
     }
   },
   "options": {
@@ -57,6 +66,13 @@
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
           "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
         }
+      },
+      "remove_confirm": {
+        "title": "删除 Entity Claim？",
+        "description": "将停止管理 `{target_entity_id}`，并删除此配置创建的所有 Claim Entity 和诊断传感器。Source Entity 不会被删除。",
+        "menu_options": {
+          "remove_entry": "删除 Entity Claim"
+        }
       }
     },
     "error": {
@@ -65,6 +81,9 @@
       "claim_cannot_be_target": "不能将 Claim Entity 作为 Source Entity 管理。",
       "invalid_requesters": "一个或多个 requester 名称无法使用，请查看上方详情。",
       "entity_id_conflict": "生成的 Entity ID 已被占用。冲突 ID 显示在上方；请先删除或重命名冲突实体，然后重试。"
+    },
+    "abort": {
+      "removed": "Entity Claim 配置已删除。"
     }
   },
   "selector": {

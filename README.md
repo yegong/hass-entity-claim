@@ -168,7 +168,7 @@ Automation
 Schedule
 ```
 
-The integration automatically generates and maintains a stable machine ID for each requester. The entered text remains the requester name used in the Claim Entity's Friendly Name. Leave the list empty to configure zero requesters.
+The integration automatically generates and maintains a stable machine ID for each requester. The entered text remains the requester name used in the Claim Entity's Friendly Name. At least one requester is required when creating a configuration.
 
 This configuration produces entities similar to:
 
@@ -189,6 +189,8 @@ Use **Configure** from Home Assistant's Helpers page, or **Reconfigure** on the 
 - enable or disable the Diagnostic Sensor.
 
 Renaming a requester does not create a new Claim Entity during normal reconfiguration because the integration keeps its generated machine ID stable.
+
+Removing every requester and submitting the form opens a deletion confirmation instead of saving an empty configuration. Selecting **Remove Entity Claim** deletes the Config Entry and all Claim Entities and diagnostic entities it created. Cancelling or closing the confirmation leaves the existing configuration unchanged. The Source Entity is never deleted.
 
 The Source Entity is fixed during reconfiguration. Create another Config Entry to manage a different source. If the original Source Entity's `entity_id` is changed, remove and recreate its Entity Claim configuration.
 

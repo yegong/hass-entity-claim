@@ -213,6 +213,8 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                         if validation_error == "invalid_requesters"
                         else "base"
                     ] = validation_error
+                elif not requesters:
+                    errors[CONF_REQUESTERS] = "requester_required"
                 else:
                     assert requesters is not None
                     await self.async_set_unique_id(target_entity_id)
@@ -266,11 +268,11 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 assert requesters is not None
                 await self.async_set_unique_id(target_entity_id)
                 self._abort_if_unique_id_mismatch()
+                if not requesters:
+                    return self._show_remove_menu(target_entity_id)
+                data = _entry_data(target_entity_id, user_input, requesters)
                 return self.async_update_reload_and_abort(
-                    entry,
-                    data_updates=_entry_data(
-                        target_entity_id, user_input, requesters
-                    ),
+                    entry, data_updates=data
                 )
 
         return self.async_show_form(
@@ -283,6 +285,23 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             },
         )
 
+    async def async_step_remove_entry(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Remove the config entry after explicit confirmation."""
+
+        entry = self._get_reconfigure_entry()
+        await self.hass.config_entries.async_remove(entry.entry_id)
+        return self.async_abort(reason="removed")
+
+    def _show_remove_menu(self, target_entity_id: str) -> ConfigFlowResult:
+        """Ask for explicit confirmation before removing the config entry."""
+
+        return self.async_show_menu(
+            step_id="remove_confirm",
+            menu_options=["remove_entry"],
+            description_placeholders={"target_entity_id": target_entity_id},
+        )
 
 
 class EntityClaimOptionsFlow(OptionsFlowWithReload):
@@ -322,9 +341,10 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
                 ] = validation_error
             else:
                 assert requesters is not None
+                if not requesters:
+                    return self._show_remove_menu(target_entity_id)
                 data = _entry_data(target_entity_id, user_input, requesters)
-                self.hass.config_entries.async_update_entry(entry, data=data)
-                return self.async_create_entry(title="", data=data)
+                return self._save(data)
 
         return self.async_show_form(
             step_id="init",
@@ -334,4 +354,27 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
                 "target_entity_id": target_entity_id,
                 "error_detail": detail,
             },
+        )
+
+    async def async_step_remove_entry(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Remove the config entry after explicit confirmation."""
+
+        await self.hass.config_entries.async_remove(self.config_entry.entry_id)
+        return self.async_abort(reason="removed")
+
+    def _save(self, data: dict[str, Any]) -> ConfigFlowResult:
+        """Store normalized data and finish the options flow."""
+
+        self.hass.config_entries.async_update_entry(self.config_entry, data=data)
+        return self.async_create_entry(title="", data=data)
+
+    def _show_remove_menu(self, target_entity_id: str) -> ConfigFlowResult:
+        """Ask for explicit confirmation before removing the config entry."""
+
+        return self.async_show_menu(
+            step_id="remove_confirm",
+            menu_options=["remove_entry"],
+            description_placeholders={"target_entity_id": target_entity_id},
         )
