@@ -1,0 +1,11 @@
+{
+  "domain": "entity_claim",
+  "name": "Entity Claim",
+  "codeowners": [],
+  "config_flow": true,
+  "documentation": "https://github.com/yegong/hass-entity-claim",
+  "integration_type": "helper",
+  "iot_class": "calculated",
+  "requirements": [],
+  "version": "0.1.0"
+}

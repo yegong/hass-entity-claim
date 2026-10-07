@@ -1,0 +1,78 @@
+{
+  "title": "Entity Claim",
+  "config": {
+    "step": {
+      "user": {
+        "title": "配置 Entity Claim",
+        "description": "为每个 requester 创建一个逻辑 Claim Entity。每行使用 `requester_id: 显示名称` 格式；留空表示不配置 requester。\n\n{error_detail}",
+        "data": {
+          "target_entity_id": "Source Entity",
+          "requesters": "Requesters",
+          "aggregation_policy": "聚合策略",
+          "diagnostic_sensor_enabled": "创建诊断传感器"
+        },
+        "data_description": {
+          "target_entity_id": "其实际状态将由聚合结果控制的原始 Entity。",
+          "requesters": "每行填写稳定的小写 ID、冒号和用户可见名称。",
+          "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
+          "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。"
+        }
+      },
+      "reconfigure": {
+        "title": "重新配置 Entity Claim",
+        "description": "Source Entity：`{target_entity_id}`。使用 `requester_id: 显示名称` 添加、删除或重命名 requester。仅修改名称时应保持 ID 不变。\n\n{error_detail}",
+        "data": {
+          "requesters": "Requesters",
+          "aggregation_policy": "聚合策略",
+          "diagnostic_sensor_enabled": "创建诊断传感器"
+        },
+        "data_description": {
+          "requesters": "删除某一行会删除对应 Claim Entity；留空表示零 requester。",
+          "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
+          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
+        }
+      }
+    },
+    "error": {
+      "target_not_found": "当前找不到所选 Source Entity。",
+      "unsupported_domain": "当前仅支持 fan、light 和 switch Source Entity。",
+      "claim_cannot_be_target": "不能将 Claim Entity 作为 Source Entity 管理。",
+      "invalid_requesters": "requester 声明或生成的 Entity ID 无效，请查看上方详情。",
+      "entity_id_conflict": "生成的 Entity ID 已被占用。冲突 ID 显示在上方；请先删除或重命名冲突实体，然后重试。"
+    },
+    "abort": {
+      "already_configured": "该 Source Entity 已由 Entity Claim 管理。",
+      "reconfigure_successful": "Entity Claim 配置已更新。"
+    }
+  },
+  "selector": {
+    "aggregation_policy": {
+      "options": {
+        "any": "ANY — 至少一个 Claim 为 ON",
+        "all": "ALL — 所有已配置 Claim 均为 ON"
+      }
+    }
+  },
+  "entity": {
+    "fan": {
+      "claim": {
+        "name": "{source_name} 由 {requester_name} 要求"
+      }
+    },
+    "light": {
+      "claim": {
+        "name": "{source_name} 由 {requester_name} 要求"
+      }
+    },
+    "switch": {
+      "claim": {
+        "name": "{source_name} 由 {requester_name} 要求"
+      }
+    },
+    "sensor": {
+      "diagnostics": {
+        "name": "{source_name} Claim 诊断"
+      }
+    }
+  }
+}
