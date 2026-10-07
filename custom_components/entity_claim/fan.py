@@ -35,6 +35,7 @@ async def async_setup_entry(
 class ClaimFanEntity(ClaimEntityMixin, RestoreEntity, FanEntity):
     """A fan claim exposing only explicitly defined Boolean semantics."""
 
-    _attr_supported_features = FanEntityFeature(0)
-
+    _attr_supported_features = (
+        FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
+    )
 

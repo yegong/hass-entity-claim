@@ -4,7 +4,7 @@
     "step": {
       "user": {
         "title": "配置 Entity Claim",
-        "description": "为每个 requester 创建一个逻辑 Claim Entity。输入名称，然后点击添加来创建下一个 requester；机器 ID 会自动生成。\n\n{error_detail}",
+        "description": "为每个 requester 创建一个 Claim Entity。\n\n{error_detail}",
         "data": {
           "target_entity_id": "Source Entity",
           "requesters": "Requester 名称",
@@ -13,21 +13,19 @@
         },
         "data_description": {
           "target_entity_id": "其实际状态将由聚合结果控制的原始 Entity。",
-          "requesters": "每项代表一个 requester；motion、Motion 和 MOTION 等名称均可使用。",
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
           "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。"
         }
       },
       "reconfigure": {
         "title": "重新配置 Entity Claim",
-        "description": "Source Entity：`{target_entity_id}`。添加、删除或重命名 requester 项目；稳定的机器 ID 由 Integration 自动管理。\n\n{error_detail}",
+        "description": "管理 `{target_entity_id}` 的 requester。\n\n{error_detail}",
         "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
           "diagnostic_sensor_enabled": "创建诊断传感器"
         },
         "data_description": {
-          "requesters": "使用添加或删除按钮管理 Claim Entity；空列表表示零 requester。",
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
           "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
         }
@@ -43,6 +41,30 @@
     "abort": {
       "already_configured": "该 Source Entity 已由 Entity Claim 管理。",
       "reconfigure_successful": "Entity Claim 配置已更新。"
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "配置 Entity Claim",
+        "description": "管理 `{target_entity_id}` 的 requester。\n\n{error_detail}",
+        "data": {
+          "requesters": "Requester 名称",
+          "aggregation_policy": "聚合策略",
+          "diagnostic_sensor_enabled": "创建诊断传感器"
+        },
+        "data_description": {
+          "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
+          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
+        }
+      }
+    },
+    "error": {
+      "target_not_found": "当前找不到 Source Entity。",
+      "unsupported_domain": "当前仅支持 fan、light 和 switch Source Entity。",
+      "claim_cannot_be_target": "不能将 Claim Entity 作为 Source Entity 管理。",
+      "invalid_requesters": "一个或多个 requester 名称无法使用，请查看上方详情。",
+      "entity_id_conflict": "生成的 Entity ID 已被占用。冲突 ID 显示在上方；请先删除或重命名冲突实体，然后重试。"
     }
   },
   "selector": {

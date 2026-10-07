@@ -168,7 +168,7 @@ Automation
 Schedule
 ```
 
-The integration automatically turns each name into a stable lowercase machine ID. `motion`, `Motion`, and `MOTION` are all valid and generate the ID `motion`; the original text remains the requester name used in the Claim Entity's Friendly Name. Leave the list empty to configure zero requesters.
+The integration automatically generates and maintains a stable machine ID for each requester. The entered text remains the requester name used in the Claim Entity's Friendly Name. Leave the list empty to configure zero requesters.
 
 This configuration produces entities similar to:
 
@@ -180,7 +180,7 @@ fan.example_target_required_by_automation
 
 ### Reconfiguration
 
-Use **Reconfigure** on the Config Entry from Home Assistant's integration page to:
+Use **Configure** from Home Assistant's Helpers page, or **Reconfigure** on the Config Entry from the integration page, to:
 
 - add a requester;
 - remove a requester;
@@ -286,7 +286,7 @@ The entity uses Home Assistant's diagnostic category and is disabled by default.
 ```text
 custom_components/entity_claim/
 ├── __init__.py          # Config Entry setup, unload, and reconfiguration
-├── config_flow.py       # Initial configuration and Reconfigure UI
+├── config_flow.py       # Initial configuration and editing flows
 ├── const.py             # Domain, platform, and configuration constants
 ├── controller.py        # Claim state, aggregation, listeners, and reconciliation
 ├── entity.py            # Shared Claim Entity base class

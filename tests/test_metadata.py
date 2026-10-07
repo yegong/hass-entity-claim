@@ -37,7 +37,18 @@ class MetadataTests(unittest.TestCase):
             self.assertIn("name", strings["entity"][platform]["claim"])
         self.assertIn("name", strings["entity"]["sensor"]["diagnostics"])
 
+    def test_fan_claim_declares_boolean_actions(self) -> None:
+        source = (INTEGRATION_DIR / "fan.py").read_text(encoding="utf-8")
+        self.assertIn("FanEntityFeature.TURN_ON", source)
+        self.assertIn("FanEntityFeature.TURN_OFF", source)
+
+    def test_helpers_ui_has_an_options_flow(self) -> None:
+        source = (INTEGRATION_DIR / "config_flow.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("async_get_options_flow", source)
+        self.assertIn("OptionsFlowWithReload", source)
+
 
 if __name__ == "__main__":
     unittest.main()
-
