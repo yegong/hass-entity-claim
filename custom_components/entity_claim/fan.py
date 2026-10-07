@@ -26,6 +26,7 @@ async def async_setup_entry(
             entry.entry_id,
             requester,
             runtime.source_name,
+            runtime.source_device,
             restore_state=requester.id in runtime.restore_requester_ids,
         )
         for requester in runtime.requesters
@@ -38,4 +39,3 @@ class ClaimFanEntity(ClaimEntityMixin, RestoreEntity, FanEntity):
     _attr_supported_features = (
         FanEntityFeature.TURN_ON | FanEntityFeature.TURN_OFF
     )
-

@@ -17,6 +17,7 @@ from homeassistant.const import (
 )
 from homeassistant.core import Event, HomeAssistant, State, callback
 from homeassistant.exceptions import HomeAssistantError
+from homeassistant.helpers.device_registry import AnyDeviceEntry
 from homeassistant.helpers.event import async_track_state_change_event
 
 from .model import (
@@ -41,6 +42,7 @@ class EntityClaimRuntime:
     requesters: tuple[Requester, ...]
     target_domain: str
     source_name: str
+    source_device: AnyDeviceEntry | None
     restore_requester_ids: frozenset[str]
     diagnostic_enabled: bool
 

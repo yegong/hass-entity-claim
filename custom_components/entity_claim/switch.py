@@ -26,6 +26,7 @@ async def async_setup_entry(
             entry.entry_id,
             requester,
             runtime.source_name,
+            runtime.source_device,
             restore_state=requester.id in runtime.restore_requester_ids,
         )
         for requester in runtime.requesters
@@ -34,5 +35,4 @@ async def async_setup_entry(
 
 class ClaimSwitchEntity(ClaimEntityMixin, RestoreEntity, SwitchEntity):
     """A writable Boolean requirement represented in the switch domain."""
-
 

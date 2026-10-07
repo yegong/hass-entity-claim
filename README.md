@@ -88,6 +88,8 @@ Claim = OFF  The requester currently has no requirement for it to be on
 
 A claim is not the device's actual state. A claim can remain `on` while `fan.example_target` is temporarily `off`; the integration will reconcile the source from the stored desired state.
 
+When the Source Entity belongs to a Device, its Claim Entities and optional Diagnostic Sensor are linked to that same Device. They therefore follow the Device's area automatically. If the Source Entity has its own Entity-level area assignment, that area is copied to generated entities that do not already have a user-assigned area.
+
 ### Internal Aggregator
 
 The integration combines all Claim states into an internal desired state. It does not create an additional Aggregate Entity by default.
@@ -298,7 +300,7 @@ custom_components/entity_claim/
 ├── sensor.py            # Optional Diagnostic Sensor
 ├── model.py             # HA-independent aggregation and reconciliation model
 ├── schema.py            # Requester parsing, validation, and naming rules
-├── registry.py          # Entity Registry conflict and lifecycle handling
+├── registry.py          # Entity Registry conflict, area, and lifecycle handling
 ├── manifest.json        # Integration metadata
 ├── strings.json         # Base configuration UI strings
 └── translations/        # English and Simplified Chinese translations

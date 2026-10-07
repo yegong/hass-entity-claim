@@ -19,6 +19,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.config_entries import ConfigEntryError, ConfigEntryNotReady
     from homeassistant.const import ATTR_FRIENDLY_NAME, Platform
     from homeassistant.helpers import entity_registry as er
+    from homeassistant.helpers.device import async_entity_id_to_device
 
     from .const import (
         CONF_AGGREGATION_POLICY,
@@ -34,6 +35,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         diagnostic_unique_id,
         existing_requester_ids,
         find_entity_id_conflict,
+        inherit_source_entity_area,
         remove_stale_entities,
         verify_new_entity_ids,
     )
@@ -95,6 +97,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         requesters=requesters,
         target_domain=target_domain,
         source_name=source_name,
+        source_device=async_entity_id_to_device(hass, target_entity_id),
         restore_requester_ids=restore_ids,
         diagnostic_enabled=diagnostic_enabled,
     )
@@ -121,6 +124,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             f"Claim entity ID became occupied during setup: {raced_entity_id}"
         )
 
+    inherit_source_entity_area(hass, entry.entry_id, target_entity_id)
     await controller.async_start()
     return True
 

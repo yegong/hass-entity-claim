@@ -96,6 +96,34 @@ def existing_requester_ids(
     )
 
 
+def inherit_source_entity_area(
+    hass: HomeAssistant,
+    config_entry_id: str,
+    source_entity_id: str,
+) -> None:
+    """Copy an explicit source entity area to unassigned generated entities.
+
+    A source Device area is inherited through the entity-to-device link. This
+    function handles an Entity-level area override and sources without Devices.
+    Existing user-assigned areas are preserved.
+    """
+
+    registry = er.async_get(hass)
+    source_entry = registry.async_get(source_entity_id)
+    if source_entry is None or source_entry.area_id is None:
+        return
+
+    for entry in tuple(registry.entities.values()):
+        if (
+            entry.config_entry_id == config_entry_id
+            and entry.platform == DOMAIN
+            and entry.area_id is None
+        ):
+            registry.async_update_entity(
+                entry.entity_id, area_id=source_entry.area_id
+            )
+
+
 def remove_stale_entities(
     hass: HomeAssistant,
     config_entry_id: str,

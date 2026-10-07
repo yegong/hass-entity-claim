@@ -50,6 +50,27 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("async_get_options_flow", source)
         self.assertIn("OptionsFlowWithReload", source)
 
+    def test_generated_entities_inherit_source_location(self) -> None:
+        setup_source = (INTEGRATION_DIR / "__init__.py").read_text(
+            encoding="utf-8"
+        )
+        claim_source = (INTEGRATION_DIR / "entity.py").read_text(
+            encoding="utf-8"
+        )
+        sensor_source = (INTEGRATION_DIR / "sensor.py").read_text(
+            encoding="utf-8"
+        )
+        registry_source = (INTEGRATION_DIR / "registry.py").read_text(
+            encoding="utf-8"
+        )
+
+        self.assertIn("async_entity_id_to_device", setup_source)
+        self.assertIn("source_device=", setup_source)
+        self.assertIn("self.device_entry = source_device", claim_source)
+        self.assertIn("self.device_entry = source_device", sensor_source)
+        self.assertIn("def inherit_source_entity_area(", registry_source)
+        self.assertIn("entry.area_id is None", registry_source)
+
     def test_empty_reconfigure_offers_only_removal(self) -> None:
         source = (INTEGRATION_DIR / "config_flow.py").read_text(
             encoding="utf-8"

@@ -8,6 +8,7 @@ from homeassistant.components.sensor import SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_OFF, STATE_ON, EntityCategory
 from homeassistant.core import HomeAssistant, callback
+from homeassistant.helpers.device_registry import AnyDeviceEntry
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .controller import EntityClaimController, EntityClaimRuntime
@@ -29,6 +30,7 @@ async def async_setup_entry(
                 runtime.controller,
                 entry.entry_id,
                 runtime.source_name,
+                runtime.source_device,
             )
         ]
     )
@@ -47,8 +49,10 @@ class ClaimDiagnosticSensor(SensorEntity):
         controller: EntityClaimController,
         config_entry_id: str,
         source_name: str,
+        source_device: AnyDeviceEntry | None,
     ) -> None:
         self._controller = controller
+        self.device_entry = source_device
         self._attr_unique_id = diagnostic_unique_id(config_entry_id)
         self._attr_translation_placeholders = {"source_name": source_name}
         self.entity_id = diagnostic_entity_id(controller.target_entity_id)
@@ -100,4 +104,3 @@ class ClaimDiagnosticSensor(SensorEntity):
         """Publish the latest diagnostic snapshot."""
 
         self.async_write_ha_state()
-

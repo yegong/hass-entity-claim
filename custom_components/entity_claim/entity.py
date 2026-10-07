@@ -7,6 +7,7 @@ from typing import Any
 from homeassistant.const import STATE_ON
 from homeassistant.core import callback
 from homeassistant.exceptions import ServiceValidationError
+from homeassistant.helpers.device_registry import AnyDeviceEntry
 
 from .controller import EntityClaimController
 from .model import Requester
@@ -29,12 +30,14 @@ class ClaimEntityMixin:
         config_entry_id: str,
         requester: Requester,
         source_name: str,
+        source_device: AnyDeviceEntry | None,
         *,
         restore_state: bool,
     ) -> None:
         self._controller = controller
         self._requester = requester
         self._restore_state = restore_state
+        self.device_entry = source_device
         self._attr_unique_id = claim_unique_id(config_entry_id, requester.id)
         self._attr_translation_placeholders = {
             "source_name": source_name,
