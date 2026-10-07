@@ -63,10 +63,12 @@ It remains the canonical representation of the device's actual state. This integ
 
 ### Requester
 
-A requester represents one independent source of demand, such as `presence`, `schedule`, or `air_quality`. Each requester has:
+A requester represents one independent source of demand, such as motion, a schedule, or an air-quality automation. Each requester has:
 
-- `id`: a stable machine identifier used as part of its Entity Registry identity;
-- `name`: a user-visible name that can be changed safely.
+- a user-visible name entered during configuration;
+- a stable machine ID generated and maintained by the integration.
+
+The machine ID is intentionally not exposed as a separate configuration field.
 
 ### Claim Entity
 
@@ -154,26 +156,26 @@ Such capabilities should be added only after their aggregation semantics are cle
 Each Config Entry manages exactly one Source Entity. When adding the integration, configure:
 
 - **Source entity**: the `fan`, `light`, or `switch` to manage;
-- **Requesters**: one requester per line in `id: Name` format;
+- **Requester names**: one item for each independent source of demand;
 - **Aggregation policy**: `ANY` or `ALL`;
 - **Diagnostic sensor**: whether to create the optional diagnostic entity.
 
-Example requester input:
+Enter the first requester name, then use the **Add** button to create another input. For example, add these three items:
 
 ```text
-presence: Presence
-schedule: Schedule
-air_quality: Air Quality
+Motion
+Automation
+Schedule
 ```
 
-Requester IDs must be stable, lowercase machine identifiers. An ID must start with a lowercase letter and may then contain lowercase letters, digits, and underscores. Do not use a display name that is likely to change as the ID.
+The integration automatically turns each name into a stable lowercase machine ID. `motion`, `Motion`, and `MOTION` are all valid and generate the ID `motion`; the original text remains the requester name used in the Claim Entity's Friendly Name. Leave the list empty to configure zero requesters.
 
 This configuration produces entities similar to:
 
 ```text
-fan.example_target_required_by_presence
+fan.example_target_required_by_motion
 fan.example_target_required_by_schedule
-fan.example_target_required_by_air_quality
+fan.example_target_required_by_automation
 ```
 
 ### Reconfiguration
@@ -186,7 +188,7 @@ Use **Reconfigure** on the Config Entry from Home Assistant's integration page t
 - change the aggregation policy;
 - enable or disable the Diagnostic Sensor.
 
-Renaming a requester does not create a new Claim Entity because its Registry identity depends on the stable requester ID, not its display name.
+Renaming a requester does not create a new Claim Entity during normal reconfiguration because the integration keeps its generated machine ID stable.
 
 The Source Entity is fixed during reconfiguration. Create another Config Entry to manage a different source. If the original Source Entity's `entity_id` is changed, remove and recreate its Entity Claim configuration.
 

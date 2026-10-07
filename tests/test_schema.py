@@ -8,47 +8,79 @@ from custom_components.entity_claim.schema import (
     claim_entity_id,
     diagnostic_entity_id,
     parse_requesters,
+    requester_id_from_name,
     requesters_from_config,
     requesters_to_config,
-    requesters_to_text,
+    requesters_to_names,
 )
 
 
 class RequesterParsingTests(unittest.TestCase):
-    """Verify stable IDs remain separate from user-visible names."""
+    """Verify names produce stable machine IDs without exposing ID syntax."""
 
     def test_parse_multiple_requesters(self) -> None:
         self.assertEqual(
-            parse_requesters("presence: Presence\nschedule: Schedule Logic"),
+            parse_requesters(["motion", "Automation", "SCHEDULE"]),
             (
-                Requester("presence", "Presence"),
-                Requester("schedule", "Schedule Logic"),
+                Requester("motion", "motion"),
+                Requester("automation", "Automation"),
+                Requester("schedule", "SCHEDULE"),
             ),
         )
 
     def test_empty_input_means_zero_requesters(self) -> None:
-        self.assertEqual(parse_requesters("\n  \n"), ())
+        self.assertEqual(parse_requesters([]), ())
+        self.assertEqual(parse_requesters(["", "  "]), ())
 
-    def test_name_may_contain_colons(self) -> None:
+    def test_name_is_slugified_for_machine_id(self) -> None:
         self.assertEqual(
-            parse_requesters("safety: Safety: critical"),
-            (Requester("safety", "Safety: critical"),),
+            parse_requesters(["Window Contact"]),
+            (Requester("window_contact", "Window Contact"),),
         )
 
-    def test_duplicate_id_is_rejected(self) -> None:
-        with self.assertRaisesRegex(RequesterParseError, "duplicate requester"):
-            parse_requesters("presence: First\npresence: Second")
+    def test_case_variants_are_accepted(self) -> None:
+        for name in ("motion", "Motion", "MOTION"):
+            with self.subTest(name=name):
+                self.assertEqual(
+                    parse_requesters([name]),
+                    (Requester("motion", name),),
+                )
 
-    def test_unstable_id_format_is_rejected(self) -> None:
-        invalid_values = (
-            "Presence: Presence",
-            "1presence: Presence",
-            "presence-one: Presence",
-            "presence one: Presence",
+    def test_duplicate_generated_id_is_rejected(self) -> None:
+        with self.assertRaisesRegex(RequesterParseError, "same ID"):
+            parse_requesters(["motion", "MOTION"])
+
+    def test_non_ascii_name_has_deterministic_fallback_id(self) -> None:
+        requester_id = requester_id_from_name("移动侦测")
+        self.assertRegex(requester_id, r"^requester_[a-f0-9]{10}$")
+        self.assertEqual(requester_id_from_name("移动侦测"), requester_id)
+
+    def test_rename_reuses_previous_id(self) -> None:
+        previous = (Requester("motion", "Motion"),)
+        self.assertEqual(
+            parse_requesters(["Occupancy"], previous),
+            (Requester("motion", "Occupancy"),),
         )
-        for value in invalid_values:
-            with self.subTest(value=value), self.assertRaises(RequesterParseError):
-                parse_requesters(value)
+
+    def test_removing_item_preserves_remaining_ids(self) -> None:
+        previous = (
+            Requester("motion", "Motion"),
+            Requester("schedule", "Schedule"),
+        )
+        self.assertEqual(
+            parse_requesters(["Schedule"], previous),
+            (Requester("schedule", "Schedule"),),
+        )
+
+    def test_added_item_gets_generated_id(self) -> None:
+        previous = (Requester("motion", "Motion"),)
+        self.assertEqual(
+            parse_requesters(["Motion", "Schedule"], previous),
+            (
+                Requester("motion", "Motion"),
+                Requester("schedule", "Schedule"),
+            ),
+        )
 
     def test_config_round_trip(self) -> None:
         requesters = (
@@ -58,8 +90,8 @@ class RequesterParsingTests(unittest.TestCase):
         stored = requesters_to_config(requesters)
         self.assertEqual(requesters_from_config(stored), requesters)
         self.assertEqual(
-            requesters_to_text(requesters),
-            "presence: Presence\nschedule: Schedule",
+            requesters_to_names(requesters),
+            ["Presence", "Schedule"],
         )
 
 

@@ -4,30 +4,30 @@
     "step": {
       "user": {
         "title": "Configure entity claims",
-        "description": "Create one logical claim per requester. Enter one requester per line as `requester_id: Requester name`. Leave the field empty to configure zero requesters.\n\n{error_detail}",
+        "description": "Create one logical Claim Entity per requester. Enter a name, then use Add to create another requester. Machine IDs are generated automatically.\n\n{error_detail}",
         "data": {
           "target_entity_id": "Source entity",
-          "requesters": "Requesters",
+          "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
           "diagnostic_sensor_enabled": "Create diagnostic sensor"
         },
         "data_description": {
           "target_entity_id": "The original entity whose actual state will be controlled.",
-          "requesters": "Stable lowercase ID followed by a user-visible name, one per line.",
+          "requesters": "Each item is one requester. Names such as motion, Motion, and MOTION are accepted.",
           "aggregation_policy": "How the current Boolean claims are combined.",
           "diagnostic_sensor_enabled": "Adds one read-only diagnostic sensor for this source."
         }
       },
       "reconfigure": {
         "title": "Reconfigure entity claims",
-        "description": "Source entity: `{target_entity_id}`. Add, remove, or rename requesters using `requester_id: Requester name`. Keep an ID unchanged when only renaming a requester.\n\n{error_detail}",
+        "description": "Source entity: `{target_entity_id}`. Add, remove, or rename requester items. Stable machine IDs are managed automatically.\n\n{error_detail}",
         "data": {
-          "requesters": "Requesters",
+          "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
           "diagnostic_sensor_enabled": "Create diagnostic sensor"
         },
         "data_description": {
-          "requesters": "Removing a line removes its Claim Entity. An empty field means zero requesters.",
+          "requesters": "Use Add or Remove to manage Claim Entities. An empty list means zero requesters.",
           "aggregation_policy": "How the current Boolean claims are combined.",
           "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
         }
@@ -37,7 +37,7 @@
       "target_not_found": "The selected source entity is not currently available.",
       "unsupported_domain": "Only fan, light, and switch source entities are currently supported.",
       "claim_cannot_be_target": "A Claim Entity cannot be managed as a source entity.",
-      "invalid_requesters": "The requester declarations or generated entity IDs are invalid. See the detail above.",
+      "invalid_requesters": "One or more requester names could not be used. See the detail above.",
       "entity_id_conflict": "A generated Entity ID is already occupied. The conflicting ID is shown above; remove or rename that entity and try again."
     },
     "abort": {

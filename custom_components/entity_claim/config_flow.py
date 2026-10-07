@@ -40,7 +40,7 @@ from .schema import (
     parse_requesters,
     requesters_from_config,
     requesters_to_config,
-    requesters_to_text,
+    requesters_to_names,
     split_entity_id,
 )
 
@@ -63,9 +63,9 @@ def _configuration_schema(
     schema[
         probatio.Required(
             CONF_REQUESTERS,
-            default=defaults.get(CONF_REQUESTERS, ""),
+            default=defaults.get(CONF_REQUESTERS, []),
         )
-    ] = TextSelector(TextSelectorConfig(multiline=True))
+    ] = TextSelector(TextSelectorConfig(multiple=True))
     schema[
         probatio.Required(
             CONF_AGGREGATION_POLICY,
@@ -158,7 +158,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         target_entity_id = entry.data[CONF_TARGET_ENTITY_ID]
         current_requesters = requesters_from_config(entry.data[CONF_REQUESTERS])
         defaults = user_input or {
-            CONF_REQUESTERS: requesters_to_text(current_requesters),
+            CONF_REQUESTERS: requesters_to_names(current_requesters),
             CONF_AGGREGATION_POLICY: entry.data[CONF_AGGREGATION_POLICY],
             CONF_DIAGNOSTIC_SENSOR_ENABLED: entry.data[
                 CONF_DIAGNOSTIC_SENSOR_ENABLED
@@ -172,6 +172,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 target_entity_id,
                 user_input,
                 config_entry_id=entry.entry_id,
+                previous_requesters=current_requesters,
             )
             if validation_error:
                 errors[
@@ -206,6 +207,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         user_input: dict[str, Any],
         *,
         config_entry_id: str | None = None,
+        previous_requesters: tuple[Requester, ...] = (),
     ) -> tuple[tuple[Requester, ...] | None, str | None, str]:
         """Validate target, requester syntax, and all exact entity IDs."""
 
@@ -226,7 +228,9 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             return None, "claim_cannot_be_target", target_entity_id
 
         try:
-            requesters = parse_requesters(user_input[CONF_REQUESTERS])
+            requesters = parse_requesters(
+                user_input[CONF_REQUESTERS], previous_requesters
+            )
             # Validate length before doing registry lookups.
             for requester in requesters:
                 claim_entity_id(target_entity_id, requester.id)

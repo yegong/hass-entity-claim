@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+from collections import defaultdict, deque
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from hashlib import sha256
 import re
 from typing import Any, Final
+import unicodedata
 
 from .const import CONF_REQUESTER_ID, CONF_REQUESTER_NAME
 from .model import Requester
@@ -18,53 +21,110 @@ MAX_ENTITY_ID_LENGTH: Final = 255
 
 @dataclass(frozen=True, slots=True)
 class RequesterParseError(ValueError):
-    """A requester declaration could not be parsed."""
+    """A requester name could not be converted into a valid requester."""
 
-    line: int
+    item: int
     reason: str
 
     def __str__(self) -> str:
         """Return a concise user-facing detail."""
 
-        prefix = f"Line {self.line}: " if self.line else ""
+        prefix = f"Requester {self.item}: " if self.item else ""
         return f"{prefix}{self.reason}"
 
 
-def parse_requesters(value: str) -> tuple[Requester, ...]:
-    """Parse one ``id: name`` requester per line."""
+def requester_id_from_name(name: str) -> str:
+    """Generate a deterministic machine ID from a user-visible name."""
+
+    ascii_name = (
+        unicodedata.normalize("NFKD", name)
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .casefold()
+    )
+    requester_id = re.sub(r"[^a-z0-9]+", "_", ascii_name).strip("_")
+    digest = sha256(name.casefold().encode()).hexdigest()[:10]
+    if not requester_id:
+        requester_id = f"requester_{digest}"
+    elif not requester_id[0].isalpha():
+        requester_id = f"requester_{requester_id}"
+    if len(requester_id) > MAX_REQUESTER_ID_LENGTH:
+        requester_id = (
+            f"{requester_id[: MAX_REQUESTER_ID_LENGTH - len(digest) - 1]}_{digest}"
+        )
+    return requester_id
+
+
+def parse_requesters(
+    value: Sequence[str],
+    previous: Sequence[Requester] = (),
+) -> tuple[Requester, ...]:
+    """Build requesters from a dynamic list of user-visible names.
+
+    Existing IDs are matched by name first and then by unchanged row position.
+    This keeps entity registry identities stable for normal rename, add, remove,
+    and case-change operations without exposing machine IDs in the UI.
+    """
+
+    if isinstance(value, (str, bytes)):
+        raise RequesterParseError(0, "expected a list of requester names")
+
+    names: list[str] = []
+    original_positions: list[int] = []
+    for item_number, raw_name in enumerate(value, start=1):
+        if not isinstance(raw_name, str):
+            raise RequesterParseError(item_number, "name must be text")
+        name = raw_name.strip()
+        if not name:
+            continue
+        if len(name) > MAX_REQUESTER_NAME_LENGTH:
+            raise RequesterParseError(
+                item_number,
+                f"name exceeds {MAX_REQUESTER_NAME_LENGTH} characters",
+            )
+        names.append(name)
+        original_positions.append(item_number - 1)
+
+    previous_by_name: dict[str, deque[Requester]] = defaultdict(deque)
+    for requester in previous:
+        previous_by_name[requester.name.casefold()].append(requester)
+
+    assigned_ids: list[str | None] = [None] * len(names)
+    available_previous_ids = {requester.id for requester in previous}
+
+    # Preserve identity when rows are retained or only their letter case changes.
+    for index, name in enumerate(names):
+        matches = previous_by_name[name.casefold()]
+        while matches and matches[0].id not in available_previous_ids:
+            matches.popleft()
+        if matches:
+            requester = matches.popleft()
+            assigned_ids[index] = requester.id
+            available_previous_ids.remove(requester.id)
+
+    # A changed name in the same row is a rename, not a new requester.
+    for index, original_position in enumerate(original_positions):
+        if assigned_ids[index] is not None or original_position >= len(previous):
+            continue
+        requester = previous[original_position]
+        if requester.id in available_previous_ids:
+            assigned_ids[index] = requester.id
+            available_previous_ids.remove(requester.id)
 
     requesters: list[Requester] = []
     seen: set[str] = set()
-    for line_number, raw_line in enumerate(value.splitlines(), start=1):
-        line = raw_line.strip()
-        if not line:
-            continue
-        requester_id, separator, name = line.partition(":")
-        requester_id = requester_id.strip()
-        name = name.strip()
-        if not separator or not requester_id or not name:
-            raise RequesterParseError(
-                line_number, "expected the format 'requester_id: Requester name'"
-            )
-        if len(requester_id) > MAX_REQUESTER_ID_LENGTH:
-            raise RequesterParseError(
-                line_number,
-                f"requester id exceeds {MAX_REQUESTER_ID_LENGTH} characters",
-            )
+    for item_number, (name, requester_id) in enumerate(
+        zip(names, assigned_ids, strict=True), start=1
+    ):
+        requester_id = requester_id or requester_id_from_name(name)
         if not _REQUESTER_ID_PATTERN.fullmatch(requester_id):
             raise RequesterParseError(
-                line_number,
-                "requester id must start with a lowercase letter and contain "
-                "only lowercase letters, digits, and underscores",
-            )
-        if len(name) > MAX_REQUESTER_NAME_LENGTH:
-            raise RequesterParseError(
-                line_number,
-                f"requester name exceeds {MAX_REQUESTER_NAME_LENGTH} characters",
+                item_number, f"could not generate a valid ID from '{name}'"
             )
         if requester_id in seen:
             raise RequesterParseError(
-                line_number, f"duplicate requester id '{requester_id}'"
+                item_number,
+                f"'{name}' generates the same ID as another requester",
             )
         seen.add(requester_id)
         requesters.append(Requester(requester_id, name))
@@ -93,12 +153,10 @@ def requesters_to_config(
     ]
 
 
-def requesters_to_text(requesters: tuple[Requester, ...]) -> str:
-    """Serialize requesters for the multiline config-flow field."""
+def requesters_to_names(requesters: Sequence[Requester]) -> list[str]:
+    """Return user-visible names for the dynamic config-flow list."""
 
-    return "\n".join(
-        f"{requester.id}: {requester.name}" for requester in requesters
-    )
+    return [requester.name for requester in requesters]
 
 
 def split_entity_id(entity_id: str) -> tuple[str, str]:
