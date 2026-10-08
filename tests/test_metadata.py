@@ -50,6 +50,25 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("async_get_options_flow", source)
         self.assertIn("OptionsFlowWithReload", source)
 
+    def test_override_configuration_is_translated_in_every_flow(self) -> None:
+        """Ensure both override settings remain editable everywhere."""
+
+        for filename in (
+            "strings.json",
+            "translations/en.json",
+            "translations/zh-Hans.json",
+        ):
+            with (INTEGRATION_DIR / filename).open(encoding="utf-8") as file:
+                strings = json.load(file)
+            for flow, step in (
+                ("config", "user"),
+                ("config", "reconfigure"),
+                ("options", "init"),
+            ):
+                data = strings[flow]["step"][step]["data"]
+                self.assertIn("respect_source_changes", data)
+                self.assertIn("override_duration_minutes", data)
+
     def test_generated_entities_inherit_source_location(self) -> None:
         setup_source = (INTEGRATION_DIR / "__init__.py").read_text(
             encoding="utf-8"

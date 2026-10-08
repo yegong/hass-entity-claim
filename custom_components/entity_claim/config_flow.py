@@ -12,13 +12,15 @@ from homeassistant.config_entries import (
     ConfigFlowResult,
     OptionsFlowWithReload,
 )
-from homeassistant.const import ATTR_FRIENDLY_NAME
+from homeassistant.const import ATTR_FRIENDLY_NAME, UnitOfTime
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers import entity_registry as er
 from homeassistant.helpers.selector import (
     BooleanSelector,
     EntitySelector,
     EntitySelectorConfig,
+    NumberSelector,
+    NumberSelectorConfig,
     SelectSelector,
     SelectSelectorConfig,
     TextSelector,
@@ -28,10 +30,14 @@ from homeassistant.helpers.selector import (
 from .const import (
     CONF_AGGREGATION_POLICY,
     CONF_DIAGNOSTIC_SENSOR_ENABLED,
+    CONF_OVERRIDE_DURATION_MINUTES,
     CONF_REQUESTERS,
+    CONF_RESPECT_SOURCE_CHANGES,
     CONF_TARGET_ENTITY_ID,
     DEFAULT_AGGREGATION_POLICY,
     DEFAULT_DIAGNOSTIC_SENSOR_ENABLED,
+    DEFAULT_OVERRIDE_DURATION_MINUTES,
+    DEFAULT_RESPECT_SOURCE_CHANGES,
     DOMAIN,
     SUPPORTED_DOMAINS,
 )
@@ -92,6 +98,31 @@ def _configuration_schema(
             ),
         )
     ] = BooleanSelector()
+    schema[
+        probatio.Required(
+            CONF_RESPECT_SOURCE_CHANGES,
+            default=defaults.get(
+                CONF_RESPECT_SOURCE_CHANGES,
+                DEFAULT_RESPECT_SOURCE_CHANGES,
+            ),
+        )
+    ] = BooleanSelector()
+    schema[
+        probatio.Required(
+            CONF_OVERRIDE_DURATION_MINUTES,
+            default=defaults.get(
+                CONF_OVERRIDE_DURATION_MINUTES,
+                DEFAULT_OVERRIDE_DURATION_MINUTES,
+            ),
+        )
+    ] = NumberSelector(
+        NumberSelectorConfig(
+            min=1,
+            max=1440,
+            step=1,
+            unit_of_measurement=UnitOfTime.MINUTES,
+        )
+    )
     return probatio.Schema(schema)
 
 
@@ -167,6 +198,12 @@ def _entry_data(
         CONF_AGGREGATION_POLICY: user_input[CONF_AGGREGATION_POLICY],
         CONF_DIAGNOSTIC_SENSOR_ENABLED: bool(
             user_input[CONF_DIAGNOSTIC_SENSOR_ENABLED]
+        ),
+        CONF_RESPECT_SOURCE_CHANGES: bool(
+            user_input[CONF_RESPECT_SOURCE_CHANGES]
+        ),
+        CONF_OVERRIDE_DURATION_MINUTES: int(
+            user_input[CONF_OVERRIDE_DURATION_MINUTES]
         ),
     }
 
@@ -246,6 +283,14 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_DIAGNOSTIC_SENSOR_ENABLED: entry.data[
                 CONF_DIAGNOSTIC_SENSOR_ENABLED
             ],
+            CONF_RESPECT_SOURCE_CHANGES: entry.data.get(
+                CONF_RESPECT_SOURCE_CHANGES,
+                DEFAULT_RESPECT_SOURCE_CHANGES,
+            ),
+            CONF_OVERRIDE_DURATION_MINUTES: entry.data.get(
+                CONF_OVERRIDE_DURATION_MINUTES,
+                DEFAULT_OVERRIDE_DURATION_MINUTES,
+            ),
         }
         errors: dict[str, str] = {}
         detail = ""
@@ -329,6 +374,14 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
             CONF_DIAGNOSTIC_SENSOR_ENABLED: entry.data[
                 CONF_DIAGNOSTIC_SENSOR_ENABLED
             ],
+            CONF_RESPECT_SOURCE_CHANGES: entry.data.get(
+                CONF_RESPECT_SOURCE_CHANGES,
+                DEFAULT_RESPECT_SOURCE_CHANGES,
+            ),
+            CONF_OVERRIDE_DURATION_MINUTES: entry.data.get(
+                CONF_OVERRIDE_DURATION_MINUTES,
+                DEFAULT_OVERRIDE_DURATION_MINUTES,
+            ),
         }
         errors: dict[str, str] = {}
         detail = ""

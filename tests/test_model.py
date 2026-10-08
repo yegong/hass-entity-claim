@@ -8,6 +8,8 @@ from custom_components.entity_claim.model import (
     ReconcileAction,
     Requester,
     aggregate_claims,
+    is_conflicting_external_change,
+    matches_pending_command,
     reconcile_action,
 )
 
@@ -84,6 +86,84 @@ class ReconcileActionTests(unittest.TestCase):
         self.assertIsNone(reconcile_action(False, None))
 
 
+class ExternalChangeTests(unittest.TestCase):
+    """Verify the Manual Override gate is separate from aggregation."""
+
+    def test_conflicting_external_change_starts_override(self) -> None:
+        self.assertTrue(
+            is_conflicting_external_change(
+                True,
+                False,
+                self_induced=False,
+                source_recovered=False,
+            )
+        )
+
+    def test_matching_external_change_does_not_start_override(self) -> None:
+        self.assertFalse(
+            is_conflicting_external_change(
+                False,
+                False,
+                self_induced=False,
+                source_recovered=False,
+            )
+        )
+
+    def test_self_induced_change_does_not_start_override(self) -> None:
+        self.assertFalse(
+            is_conflicting_external_change(
+                True,
+                False,
+                self_induced=True,
+                source_recovered=False,
+            )
+        )
+
+    def test_unknown_and_unavailable_do_not_start_override(self) -> None:
+        self.assertFalse(
+            is_conflicting_external_change(
+                True,
+                None,
+                self_induced=False,
+                source_recovered=False,
+            )
+        )
+
+    def test_first_explicit_state_after_recovery_does_not_start_override(
+        self,
+    ) -> None:
+        self.assertFalse(
+            is_conflicting_external_change(
+                True,
+                False,
+                self_induced=False,
+                source_recovered=True,
+            )
+        )
+
+
+class PendingCommandTests(unittest.TestCase):
+    """Verify exact Context correlation and the constrained fallback."""
+
+    def test_exact_context_matches(self) -> None:
+        self.assertTrue(
+            matches_pending_command(True, True, "command", None, "command")
+        )
+
+    def test_child_context_matches_even_when_desired_has_changed(self) -> None:
+        self.assertTrue(
+            matches_pending_command(False, True, "child", "command", "command")
+        )
+
+    def test_expected_state_falls_back_when_context_is_lost(self) -> None:
+        self.assertTrue(
+            matches_pending_command(True, True, "device", None, "command")
+        )
+
+    def test_unrelated_context_and_state_do_not_match(self) -> None:
+        self.assertFalse(
+            matches_pending_command(False, True, "external", None, "command")
+        )
+
 if __name__ == "__main__":
     unittest.main()
-

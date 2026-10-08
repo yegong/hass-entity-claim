@@ -9,12 +9,16 @@
           "target_entity_id": "Source entity",
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
-          "diagnostic_sensor_enabled": "Create diagnostic sensor"
+          "diagnostic_sensor_enabled": "Create diagnostic sensor",
+          "respect_source_changes": "Respect direct changes to Source Entity",
+          "override_duration_minutes": "Manual Override duration"
         },
         "data_description": {
           "target_entity_id": "The original entity whose actual state will be controlled.",
           "aggregation_policy": "How the current Boolean claims are combined.",
-          "diagnostic_sensor_enabled": "Adds one read-only diagnostic sensor for this source."
+          "diagnostic_sensor_enabled": "Adds one read-only diagnostic sensor for this source.",
+          "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state.",
+          "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change."
         }
       },
       "reconfigure": {
@@ -23,11 +27,15 @@
         "data": {
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
-          "diagnostic_sensor_enabled": "Create diagnostic sensor"
+          "diagnostic_sensor_enabled": "Create diagnostic sensor",
+          "respect_source_changes": "Respect direct changes to Source Entity",
+          "override_duration_minutes": "Manual Override duration"
         },
         "data_description": {
           "aggregation_policy": "How the current Boolean claims are combined.",
-          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
+          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor.",
+          "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state.",
+          "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change."
         }
       },
       "remove_confirm": {
@@ -60,11 +68,15 @@
         "data": {
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
-          "diagnostic_sensor_enabled": "Create diagnostic sensor"
+          "diagnostic_sensor_enabled": "Create diagnostic sensor",
+          "respect_source_changes": "Respect direct changes to Source Entity",
+          "override_duration_minutes": "Manual Override duration"
         },
         "data_description": {
           "aggregation_policy": "How the current Boolean claims are combined.",
-          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
+          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor.",
+          "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state.",
+          "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change."
         }
       },
       "remove_confirm": {

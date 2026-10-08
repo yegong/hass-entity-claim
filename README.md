@@ -120,6 +120,20 @@ When the aggregate desired state differs from the Source Entity's actual state, 
 
 No action is called when both states already match. If the source is `unknown` or `unavailable`, reconciliation is deferred until its state becomes explicit again.
 
+### Manual Override
+
+Each Config Entry can respect direct changes to its Source Entity. When enabled, an explicit external ON/OFF change that conflicts with the current aggregated desired state starts a time-limited Manual Override:
+
+```text
+Claims → Aggregation → Desired State → Override Gate → Reconcile → Source
+```
+
+During the override, Claims continue to update and aggregation continues to calculate the latest desired state. Only reconciliation is suppressed, so `desired != actual` is an expected state while the override is active. A further conflicting external change refreshes the timer.
+
+When the period expires, the integration compares the latest desired and actual states and reconciles only if they still differ. It never restores a snapshot taken when the override began. Changes to or from `unknown` and `unavailable` do not start an override.
+
+Commands issued by Entity Claim carry their own Home Assistant Context. The Controller correlates subsequent Source state changes with that Context so its own reconciliation is not mistaken for an external override. A short-lived expected-state match is retained only as a fallback for device integrations that do not propagate Context.
+
 ## Current scope
 
 The current version supports:
@@ -129,6 +143,7 @@ The current version supports:
 - `ANY` and `ALL` aggregation;
 - adding, removing, and renaming requesters;
 - restoration of Claim state;
+- time-limited Manual Override for conflicting external Source changes;
 - an optional Diagnostic Sensor;
 - Claim Entities that are hidden by default but remain enabled.
 
@@ -136,7 +151,7 @@ It does not currently aggregate or forward structured features such as:
 
 - fan percentage;
 - light brightness, color, or color temperature;
-- requester priority, leases, or manual overrides;
+- requester priority or leases;
 - retry, backoff, or complex conflict arbitration.
 
 Such capabilities should be added only after their aggregation semantics are clearly defined. A feature supported by the Source Entity is not automatically exposed by its Claim Entities.
@@ -160,6 +175,8 @@ Each Config Entry manages exactly one Source Entity. When adding the integration
 - **Source entity**: the `fan`, `light`, or `switch` to manage;
 - **Requester names**: one item for each independent source of demand;
 - **Aggregation policy**: `ANY` or `ALL`;
+- **Respect direct changes to Source Entity**: enable the Manual Override gate;
+- **Manual Override duration**: how long reconciliation is suppressed after the latest conflicting external change;
 - **Diagnostic sensor**: whether to create the optional diagnostic entity.
 
 Enter the first requester name, then use the **Add** button to create another input. For example, add these three items:
@@ -188,6 +205,8 @@ Use **Configure** from Home Assistant's Helpers page, or **Reconfigure** on the 
 - remove a requester;
 - change a requester's name;
 - change the aggregation policy;
+- enable or disable respect for direct Source changes;
+- change the Manual Override duration;
 - enable or disable the Diagnostic Sensor.
 
 Renaming a requester does not create a new Claim Entity during normal reconfiguration because the integration keeps its generated machine ID stable.
@@ -270,11 +289,17 @@ claims:
 aggregated:
   state: "on"
 target:
-  actual_state: "on"
-in_sync: true
+  actual_state: "off"
+manual_override:
+  enabled: true
+  active: true
+  until: "2026-10-08T08:30:00+00:00"
+  reason: external_source_change
+reconciliation_suppressed: true
+in_sync: false
 ```
 
-The entity uses Home Assistant's diagnostic category and is disabled by default. Enable it from the entity page when needed.
+The entity uses Home Assistant's diagnostic category. Creation is disabled by default; enable it in the Config Entry when needed.
 
 ## Entity naming and stability
 
@@ -292,7 +317,7 @@ custom_components/entity_claim/
 ├── __init__.py          # Config Entry setup, unload, and reconfiguration
 ├── config_flow.py       # Initial configuration and editing flows
 ├── const.py             # Domain, platform, and configuration constants
-├── controller.py        # Claim state, aggregation, listeners, and reconciliation
+├── controller.py        # Aggregation, override gate, correlation, and reconciliation
 ├── entity.py            # Shared Claim Entity base class
 ├── fan.py               # fan domain adapter
 ├── light.py             # light domain adapter
@@ -320,6 +345,8 @@ Controller stores each requester's Claim
     ↓
 model.py calculates the aggregate and reconciliation decision
     ↓
+Controller applies the time-limited Manual Override gate
+    ↓
 Controller calls turn_on / turn_off on the Source Entity
 ```
 
@@ -346,11 +373,13 @@ These tests cover the pure aggregation model, reconciliation decisions, requeste
 The project intentionally keeps one small abstraction clear:
 
 ```text
-Independent Claims
-        ↓
-Explicit aggregation
-        ↓
-One Source Entity
+Independent Claims → Aggregation → Desired State
+                                      ↓
+                                Override Gate
+                                      ↓
+                                  Reconcile
+                                      ↓
+                                Source Actual State
 ```
 
-A Claim is a desired input, the Source Entity is the actual state, and the aggregate is an internal desired state. These roles remain separate, and no additional Aggregate Entity competes with the Source Entity as the canonical representation of the device.
+A Claim is a desired input, aggregation computes only the current desired state, Override controls whether reconciliation is allowed, and the Source Entity remains the canonical actual state. These roles remain separate, and no additional Aggregate Entity competes with the Source Entity.

@@ -6,6 +6,7 @@ the pure domain modules importable for local tests without installing HA.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -24,8 +25,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .const import (
         CONF_AGGREGATION_POLICY,
         CONF_DIAGNOSTIC_SENSOR_ENABLED,
+        CONF_OVERRIDE_DURATION_MINUTES,
         CONF_REQUESTERS,
+        CONF_RESPECT_SOURCE_CHANGES,
         CONF_TARGET_ENTITY_ID,
+        DEFAULT_OVERRIDE_DURATION_MINUTES,
+        DEFAULT_RESPECT_SOURCE_CHANGES,
         DOMAIN,
         SUPPORTED_DOMAINS,
     )
@@ -90,6 +95,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         AggregationPolicy(entry.data[CONF_AGGREGATION_POLICY]),
         lambda coroutine, name: entry.async_create_task(
             hass, coroutine, name
+        ),
+        respect_source_changes=bool(
+            entry.data.get(
+                CONF_RESPECT_SOURCE_CHANGES,
+                DEFAULT_RESPECT_SOURCE_CHANGES,
+            )
+        ),
+        override_duration=timedelta(
+            minutes=int(
+                entry.data.get(
+                    CONF_OVERRIDE_DURATION_MINUTES,
+                    DEFAULT_OVERRIDE_DURATION_MINUTES,
+                )
+            )
         ),
     )
     entry.runtime_data = EntityClaimRuntime(

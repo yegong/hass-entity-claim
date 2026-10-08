@@ -62,6 +62,49 @@ def reconcile_action(
     return ReconcileAction.TURN_ON if desired else ReconcileAction.TURN_OFF
 
 
+def is_conflicting_external_change(
+    desired: bool,
+    actual: bool | None,
+    *,
+    self_induced: bool,
+    source_recovered: bool,
+) -> bool:
+    """Return whether a source change should suppress reconciliation.
+
+    Unknown and unavailable states do not express control intent. Likewise,
+    the first explicit state after either condition is recovery rather than a
+    direct external command and must be reconciled normally.
+    """
+
+    return (
+        actual is not None
+        and actual != desired
+        and not self_induced
+        and not source_recovered
+    )
+
+
+def matches_pending_command(
+    actual: bool,
+    pending_desired: bool,
+    event_context_id: str,
+    event_parent_context_id: str | None,
+    pending_context_id: str,
+) -> bool:
+    """Correlate a state change with a short-lived pending command.
+
+    Exact or child Context correlation is authoritative. The expected Boolean
+    result supports device integrations which do not propagate service-call
+    Context; its time bound is enforced by the runtime controller.
+    """
+
+    return (
+        event_context_id == pending_context_id
+        or event_parent_context_id == pending_context_id
+        or actual == pending_desired
+    )
+
+
 class ClaimState:
     """Mutable set of claims with one centralized aggregation rule."""
 

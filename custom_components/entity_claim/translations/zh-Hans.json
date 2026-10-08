@@ -9,12 +9,16 @@
           "target_entity_id": "Source Entity",
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
-          "diagnostic_sensor_enabled": "创建诊断传感器"
+          "diagnostic_sensor_enabled": "创建诊断传感器",
+          "respect_source_changes": "尊重对 Source Entity 的直接变更",
+          "override_duration_minutes": "Manual Override 持续时间"
         },
         "data_description": {
           "target_entity_id": "其实际状态将由聚合结果控制的原始 Entity。",
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
-          "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。"
+          "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。",
+          "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。",
+          "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。"
         }
       },
       "reconfigure": {
@@ -23,11 +27,15 @@
         "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
-          "diagnostic_sensor_enabled": "创建诊断传感器"
+          "diagnostic_sensor_enabled": "创建诊断传感器",
+          "respect_source_changes": "尊重对 Source Entity 的直接变更",
+          "override_duration_minutes": "Manual Override 持续时间"
         },
         "data_description": {
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
-          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
+          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。",
+          "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。",
+          "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。"
         }
       },
       "remove_confirm": {
@@ -60,11 +68,15 @@
         "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
-          "diagnostic_sensor_enabled": "创建诊断传感器"
+          "diagnostic_sensor_enabled": "创建诊断传感器",
+          "respect_source_changes": "尊重对 Source Entity 的直接变更",
+          "override_duration_minutes": "Manual Override 持续时间"
         },
         "data_description": {
           "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
-          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
+          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。",
+          "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。",
+          "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。"
         }
       },
       "remove_confirm": {

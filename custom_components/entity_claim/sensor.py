@@ -63,6 +63,8 @@ class ClaimDiagnosticSensor(SensorEntity):
 
         if self._controller.actual_boolean is None:
             return "source_unavailable"
+        if self._controller.override_active:
+            return "manual_override"
         return "in_sync" if self._controller.in_sync else "out_of_sync"
 
     @property
@@ -70,6 +72,7 @@ class ClaimDiagnosticSensor(SensorEntity):
         """Return an explainable snapshot of aggregation state."""
 
         source = self._controller.actual_state
+        override_until = self._controller.override_until
         return {
             "target_entity": self._controller.target_entity_id,
             "aggregation": {"state": self._controller.state.policy.value},
@@ -88,6 +91,15 @@ class ClaimDiagnosticSensor(SensorEntity):
                 "state": STATE_ON if self._controller.desired else STATE_OFF
             },
             "target": {"actual_state": source.state if source else None},
+            "manual_override": {
+                "enabled": self._controller.respect_source_changes,
+                "active": self._controller.override_active,
+                "until": (
+                    override_until.isoformat() if override_until is not None else None
+                ),
+                "reason": self._controller.override_reason,
+            },
+            "reconciliation_suppressed": self._controller.override_active,
             "in_sync": self._controller.in_sync,
         }
 
