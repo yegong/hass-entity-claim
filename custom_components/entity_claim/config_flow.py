@@ -98,15 +98,6 @@ def _configuration_schema(
     )
     schema[
         probatio.Required(
-            CONF_DIAGNOSTIC_SENSOR_ENABLED,
-            default=defaults.get(
-                CONF_DIAGNOSTIC_SENSOR_ENABLED,
-                DEFAULT_DIAGNOSTIC_SENSOR_ENABLED,
-            ),
-        )
-    ] = BooleanSelector()
-    schema[
-        probatio.Required(
             CONF_CONTROL_POLICY,
             default=defaults.get(CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY),
         )
@@ -116,23 +107,37 @@ def _configuration_schema(
             translation_key="control_policy",
         )
     )
+    # Diagnostics are optional observability, so keep this last in the form.
     schema[
         probatio.Required(
-            CONF_OVERRIDE_DURATION_MINUTES,
+            CONF_DIAGNOSTIC_SENSOR_ENABLED,
             default=defaults.get(
-                CONF_OVERRIDE_DURATION_MINUTES,
-                DEFAULT_OVERRIDE_DURATION_MINUTES,
+                CONF_DIAGNOSTIC_SENSOR_ENABLED,
+                DEFAULT_DIAGNOSTIC_SENSOR_ENABLED,
             ),
         )
-    ] = NumberSelector(
-        NumberSelectorConfig(
-            min=1,
-            max=1440,
-            step=1,
-            unit_of_measurement=UnitOfTime.MINUTES,
-        )
-    )
+    ] = BooleanSelector()
     return probatio.Schema(schema)
+
+
+def _override_schema(default: int) -> probatio.Schema:
+    """Build the conditional Manual Override settings form."""
+
+    return probatio.Schema(
+        {
+            probatio.Required(
+                CONF_OVERRIDE_DURATION_MINUTES,
+                default=default,
+            ): NumberSelector(
+                NumberSelectorConfig(
+                    min=1,
+                    max=1440,
+                    step=1,
+                    unit_of_measurement=UnitOfTime.MINUTES,
+                )
+            )
+        }
+    )
 
 
 def _profile_for_target(
@@ -210,6 +215,7 @@ def _entry_data(
     target_entity_id: str,
     user_input: dict[str, Any],
     requesters: tuple[Requester, ...],
+    override_duration_minutes: int,
 ) -> dict[str, Any]:
     """Normalize form values for stable config-entry storage."""
 
@@ -221,9 +227,7 @@ def _entry_data(
             user_input[CONF_DIAGNOSTIC_SENSOR_ENABLED]
         ),
         CONF_CONTROL_POLICY: user_input[CONF_CONTROL_POLICY],
-        CONF_OVERRIDE_DURATION_MINUTES: int(
-            user_input[CONF_OVERRIDE_DURATION_MINUTES]
-        ),
+        CONF_OVERRIDE_DURATION_MINUTES: override_duration_minutes,
     }
 
 
@@ -233,6 +237,10 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     VERSION = 2
 
     _target_entity_id: str | None = None
+    _pending_user_input: dict[str, Any] | None = None
+    _pending_requesters: tuple[Requester, ...] | None = None
+    _pending_reconfigure_entry: ConfigEntry | None = None
+    _pending_override_duration = DEFAULT_OVERRIDE_DURATION_MINUTES
 
     @staticmethod
     @callback
@@ -317,7 +325,18 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 errors[CONF_REQUESTERS] = "requester_required"
             else:
                 assert requesters is not None
-                data = _entry_data(target_entity_id, user_input, requesters)
+                if (
+                    user_input[CONF_CONTROL_POLICY]
+                    == ControlPolicy.OVERRIDE.value
+                ):
+                    self._prepare_override_step(user_input, requesters)
+                    return await self.async_step_override()
+                data = _entry_data(
+                    target_entity_id,
+                    user_input,
+                    requesters,
+                    DEFAULT_OVERRIDE_DURATION_MINUTES,
+                )
                 return self.async_create_entry(
                     title=_target_title(self.hass, target_entity_id),
                     data=data,
@@ -340,6 +359,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         entry = self._get_reconfigure_entry()
         target_entity_id = entry.data[CONF_TARGET_ENTITY_ID]
+        self._target_entity_id = target_entity_id
         profile = _profile_for_target(self.hass, target_entity_id)
         current_requesters = requesters_from_config(entry.data[CONF_REQUESTERS])
         defaults = user_input or {
@@ -350,10 +370,6 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             ],
             CONF_CONTROL_POLICY: entry.data.get(
                 CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY
-            ),
-            CONF_OVERRIDE_DURATION_MINUTES: entry.data.get(
-                CONF_OVERRIDE_DURATION_MINUTES,
-                DEFAULT_OVERRIDE_DURATION_MINUTES,
             ),
         }
         errors: dict[str, str] = {}
@@ -379,7 +395,29 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 self._abort_if_unique_id_mismatch()
                 if not requesters:
                     return await self.async_step_remove_confirm()
-                data = _entry_data(target_entity_id, user_input, requesters)
+                current_duration = int(
+                    entry.data.get(
+                        CONF_OVERRIDE_DURATION_MINUTES,
+                        DEFAULT_OVERRIDE_DURATION_MINUTES,
+                    )
+                )
+                if (
+                    user_input[CONF_CONTROL_POLICY]
+                    == ControlPolicy.OVERRIDE.value
+                ):
+                    self._prepare_override_step(
+                        user_input,
+                        requesters,
+                        duration=current_duration,
+                        reconfigure_entry=entry,
+                    )
+                    return await self.async_step_override()
+                data = _entry_data(
+                    target_entity_id,
+                    user_input,
+                    requesters,
+                    current_duration,
+                )
                 return self.async_update_reload_and_abort(
                     entry, data_updates=data
                 )
@@ -393,6 +431,57 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
                 "error_detail": detail,
             },
         )
+
+    async def async_step_override(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure duration only when Manual Override is selected."""
+
+        if (
+            self._target_entity_id is None
+            or self._pending_user_input is None
+            or self._pending_requesters is None
+        ):
+            return await self.async_step_user()
+
+        if user_input is None:
+            return self.async_show_form(
+                step_id="override",
+                data_schema=_override_schema(self._pending_override_duration),
+                description_placeholders={
+                    "target_entity_id": self._target_entity_id
+                },
+            )
+
+        data = _entry_data(
+            self._target_entity_id,
+            self._pending_user_input,
+            self._pending_requesters,
+            int(user_input[CONF_OVERRIDE_DURATION_MINUTES]),
+        )
+        if self._pending_reconfigure_entry is not None:
+            return self.async_update_reload_and_abort(
+                self._pending_reconfigure_entry, data_updates=data
+            )
+        return self.async_create_entry(
+            title=_target_title(self.hass, self._target_entity_id),
+            data=data,
+        )
+
+    def _prepare_override_step(
+        self,
+        user_input: dict[str, Any],
+        requesters: tuple[Requester, ...],
+        *,
+        duration: int = DEFAULT_OVERRIDE_DURATION_MINUTES,
+        reconfigure_entry: ConfigEntry | None = None,
+    ) -> None:
+        """Remember validated data while the duration page is displayed."""
+
+        self._pending_user_input = user_input
+        self._pending_requesters = requesters
+        self._pending_reconfigure_entry = reconfigure_entry
+        self._pending_override_duration = duration
 
     async def async_step_remove_confirm(
         self, user_input: dict[str, Any] | None = None
@@ -424,6 +513,10 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class EntityClaimOptionsFlow(OptionsFlowWithReload):
     """Edit a helper config entry from the Helpers UI."""
 
+    _pending_user_input: dict[str, Any] | None = None
+    _pending_requesters: tuple[Requester, ...] | None = None
+    _pending_override_duration = DEFAULT_OVERRIDE_DURATION_MINUTES
+
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
@@ -441,10 +534,6 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
             ],
             CONF_CONTROL_POLICY: entry.data.get(
                 CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY
-            ),
-            CONF_OVERRIDE_DURATION_MINUTES: entry.data.get(
-                CONF_OVERRIDE_DURATION_MINUTES,
-                DEFAULT_OVERRIDE_DURATION_MINUTES,
             ),
         }
         errors: dict[str, str] = {}
@@ -468,7 +557,26 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
                 assert requesters is not None
                 if not requesters:
                     return await self.async_step_remove_confirm()
-                data = _entry_data(target_entity_id, user_input, requesters)
+                current_duration = int(
+                    entry.data.get(
+                        CONF_OVERRIDE_DURATION_MINUTES,
+                        DEFAULT_OVERRIDE_DURATION_MINUTES,
+                    )
+                )
+                if (
+                    user_input[CONF_CONTROL_POLICY]
+                    == ControlPolicy.OVERRIDE.value
+                ):
+                    self._pending_user_input = user_input
+                    self._pending_requesters = requesters
+                    self._pending_override_duration = current_duration
+                    return await self.async_step_override()
+                data = _entry_data(
+                    target_entity_id,
+                    user_input,
+                    requesters,
+                    current_duration,
+                )
                 return self._save(data)
 
         return self.async_show_form(
@@ -480,6 +588,33 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
                 "error_detail": detail,
             },
         )
+
+    async def async_step_override(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure duration only when Manual Override is selected."""
+
+        if self._pending_user_input is None or self._pending_requesters is None:
+            return await self.async_step_init()
+
+        if user_input is None:
+            return self.async_show_form(
+                step_id="override",
+                data_schema=_override_schema(self._pending_override_duration),
+                description_placeholders={
+                    "target_entity_id": self.config_entry.data[
+                        CONF_TARGET_ENTITY_ID
+                    ]
+                },
+            )
+
+        data = _entry_data(
+            self.config_entry.data[CONF_TARGET_ENTITY_ID],
+            self._pending_user_input,
+            self._pending_requesters,
+            int(user_input[CONF_OVERRIDE_DURATION_MINUTES]),
+        )
+        return self._save(data)
 
     async def async_step_remove_confirm(
         self, user_input: dict[str, Any] | None = None

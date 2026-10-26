@@ -205,8 +205,9 @@ Each Config Entry manages exactly one Source Entity. Configuration first asks fo
 - **Requester names**: one item for each independent source of demand;
 - **Aggregation policy**: `ANY = MAX` or `ALL = MIN`, described in the UI using state, brightness, speed, or position as appropriate;
 - **Control authority**: choose `Always managed`, `Allow manual override`, or `Claim-scoped control`;
-- **Manual Override duration**: how long reconciliation is suppressed after the latest conflicting external change when the override policy is selected;
 - **Diagnostic sensor**: whether to create the optional diagnostic entity.
+
+When **Allow manual override** is selected, a second configuration step asks for the **Manual Override duration**. The duration is not shown for the other control policies because they do not use it. The optional Diagnostic Sensor setting remains last in the main form.
 
 Enter the first requester name, then use the **Add** button to create another input. For example, add these three items:
 
@@ -235,7 +236,7 @@ Use **Configure** from Home Assistant's Helpers page, or **Reconfigure** on the 
 - change a requester's name;
 - change the aggregation policy;
 - change the control authority policy;
-- change the Manual Override duration;
+- change the Manual Override duration when the override policy is selected;
 - enable or disable the Diagnostic Sensor.
 
 Renaming a requester does not create a new Claim Entity during normal reconfiguration because the integration keeps its generated machine ID stable.

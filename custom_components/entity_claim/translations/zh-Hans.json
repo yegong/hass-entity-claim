@@ -18,15 +18,13 @@
         "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
-          "diagnostic_sensor_enabled": "创建诊断传感器",
           "control_policy": "控制权策略",
-          "override_duration_minutes": "Manual Override 持续时间"
+          "diagnostic_sensor_enabled": "创建诊断传感器"
         },
         "data_description": {
           "aggregation_policy": "有序需求的聚合方式。可选项文案会匹配 Source 的能力。",
-          "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。",
-          "control_policy": "选择 Entity Claim 始终控制 Source、在外部变更时暂时让出控制权，或仅控制自己确实造成的设备变化。",
-          "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。仅“允许 Manual Override”策略使用。"
+          "control_policy": "始终托管会持续执行聚合结果；允许 Manual Override 会在冲突的外部 Source 变更后暂时让出控制权；Claim 范围控制只管理 Entity Claim 确实造成的变化，并在最后一个参与的 requester 释放时恢复原始状态。",
+          "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。"
         }
       },
       "reconfigure": {
@@ -35,15 +33,23 @@
         "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
-          "diagnostic_sensor_enabled": "创建诊断传感器",
           "control_policy": "控制权策略",
-          "override_duration_minutes": "Manual Override 持续时间"
+          "diagnostic_sensor_enabled": "创建诊断传感器"
         },
         "data_description": {
           "aggregation_policy": "有序需求的聚合方式。可选项文案会匹配 Source 的能力。",
-          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。",
-          "control_policy": "选择 Entity Claim 始终控制 Source、在外部变更时暂时让出控制权，或仅控制自己确实造成的设备变化。",
-          "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。仅“允许 Manual Override”策略使用。"
+          "control_policy": "始终托管会持续执行聚合结果；允许 Manual Override 会在冲突的外部 Source 变更后暂时让出控制权；Claim 范围控制只管理 Entity Claim 确实造成的变化，并在最后一个参与的 requester 释放时恢复原始状态。",
+          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
+        }
+      },
+      "override": {
+        "title": "配置 Manual Override",
+        "description": "当外部变更与聚合 desired state 冲突时，`{target_entity_id}` 会暂时让出控制权。在此期间，Claim 与 Aggregation 仍会继续更新。",
+        "data": {
+          "override_duration_minutes": "Manual Override 持续时间"
+        },
+        "data_description": {
+          "override_duration_minutes": "从最近一次冲突的外部 Source 变更开始，抑制 Reconcile 的分钟数。"
         }
       },
       "remove_confirm": {
@@ -76,15 +82,23 @@
         "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
-          "diagnostic_sensor_enabled": "创建诊断传感器",
           "control_policy": "控制权策略",
-          "override_duration_minutes": "Manual Override 持续时间"
+          "diagnostic_sensor_enabled": "创建诊断传感器"
         },
         "data_description": {
           "aggregation_policy": "有序需求的聚合方式。可选项文案会匹配 Source 的能力。",
-          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。",
-          "control_policy": "选择 Entity Claim 始终控制 Source、在外部变更时暂时让出控制权，或仅控制自己确实造成的设备变化。",
-          "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。仅“允许 Manual Override”策略使用。"
+          "control_policy": "始终托管会持续执行聚合结果；允许 Manual Override 会在冲突的外部 Source 变更后暂时让出控制权；Claim 范围控制只管理 Entity Claim 确实造成的变化，并在最后一个参与的 requester 释放时恢复原始状态。",
+          "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。"
+        }
+      },
+      "override": {
+        "title": "配置 Manual Override",
+        "description": "当外部变更与聚合 desired state 冲突时，`{target_entity_id}` 会暂时让出控制权。在此期间，Claim 与 Aggregation 仍会继续更新。",
+        "data": {
+          "override_duration_minutes": "Manual Override 持续时间"
+        },
+        "data_description": {
+          "override_duration_minutes": "从最近一次冲突的外部 Source 变更开始，抑制 Reconcile 的分钟数。"
         }
       },
       "remove_confirm": {

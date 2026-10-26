@@ -18,15 +18,13 @@
         "data": {
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
-          "diagnostic_sensor_enabled": "Create diagnostic sensor",
           "control_policy": "Control authority",
-          "override_duration_minutes": "Manual Override duration"
+          "diagnostic_sensor_enabled": "Create diagnostic sensor"
         },
         "data_description": {
           "aggregation_policy": "How ordered requests are combined. The available wording matches the Source capability.",
-          "diagnostic_sensor_enabled": "Adds one read-only diagnostic sensor for this source.",
-          "control_policy": "Choose whether Entity Claim always controls the Source, temporarily yields to external changes, or controls only an effect it visibly created.",
-          "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change. Used only by Allow manual override."
+          "control_policy": "Always managed continuously enforces the aggregate. Allow manual override temporarily yields after a conflicting external Source change. Claim-scoped controls only an effect Entity Claim visibly caused and restores the original state when the last participating requester releases.",
+          "diagnostic_sensor_enabled": "Adds one read-only diagnostic sensor for this source."
         }
       },
       "reconfigure": {
@@ -35,15 +33,23 @@
         "data": {
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
-          "diagnostic_sensor_enabled": "Create diagnostic sensor",
           "control_policy": "Control authority",
-          "override_duration_minutes": "Manual Override duration"
+          "diagnostic_sensor_enabled": "Create diagnostic sensor"
         },
         "data_description": {
           "aggregation_policy": "How ordered requests are combined. The available wording matches the Source capability.",
-          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor.",
-          "control_policy": "Choose whether Entity Claim always controls the Source, temporarily yields to external changes, or controls only an effect it visibly created.",
-          "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change. Used only by Allow manual override."
+          "control_policy": "Always managed continuously enforces the aggregate. Allow manual override temporarily yields after a conflicting external Source change. Claim-scoped controls only an effect Entity Claim visibly caused and restores the original state when the last participating requester releases.",
+          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
+        }
+      },
+      "override": {
+        "title": "Configure Manual Override",
+        "description": "`{target_entity_id}` will temporarily yield control after an external change conflicts with the aggregated desired state. Claims and aggregation continue updating during this period.",
+        "data": {
+          "override_duration_minutes": "Manual Override duration"
+        },
+        "data_description": {
+          "override_duration_minutes": "Minutes to suppress reconciliation from the latest conflicting external Source change."
         }
       },
       "remove_confirm": {
@@ -76,15 +82,23 @@
         "data": {
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
-          "diagnostic_sensor_enabled": "Create diagnostic sensor",
           "control_policy": "Control authority",
-          "override_duration_minutes": "Manual Override duration"
+          "diagnostic_sensor_enabled": "Create diagnostic sensor"
         },
         "data_description": {
           "aggregation_policy": "How ordered requests are combined. The available wording matches the Source capability.",
-          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor.",
-          "control_policy": "Choose whether Entity Claim always controls the Source, temporarily yields to external changes, or controls only an effect it visibly created.",
-          "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change. Used only by Allow manual override."
+          "control_policy": "Always managed continuously enforces the aggregate. Allow manual override temporarily yields after a conflicting external Source change. Claim-scoped controls only an effect Entity Claim visibly caused and restores the original state when the last participating requester releases.",
+          "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor."
+        }
+      },
+      "override": {
+        "title": "Configure Manual Override",
+        "description": "`{target_entity_id}` will temporarily yield control after an external change conflicts with the aggregated desired state. Claims and aggregation continue updating during this period.",
+        "data": {
+          "override_duration_minutes": "Manual Override duration"
+        },
+        "data_description": {
+          "override_duration_minutes": "Minutes to suppress reconciliation from the latest conflicting external Source change."
         }
       },
       "remove_confirm": {

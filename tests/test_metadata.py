@@ -95,7 +95,7 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("OptionsFlowWithReload", source)
 
     def test_control_configuration_is_translated_in_every_flow(self) -> None:
-        """Ensure control policy and override duration remain editable."""
+        """Ensure Manual Override uses a conditional translated step."""
 
         for filename in (
             "strings.json",
@@ -111,7 +111,37 @@ class MetadataTests(unittest.TestCase):
             ):
                 data = strings[flow]["step"][step]["data"]
                 self.assertIn("control_policy", data)
-                self.assertIn("override_duration_minutes", data)
+                self.assertNotIn("override_duration_minutes", data)
+                self.assertEqual(
+                    list(data)[-1],
+                    "diagnostic_sensor_enabled",
+                    "Diagnostics should remain the final, optional setting",
+                )
+
+            for flow in ("config", "options"):
+                override = strings[flow]["step"]["override"]
+                self.assertEqual(
+                    set(override["data"]), {"override_duration_minutes"}
+                )
+                self.assertIn("description", override)
+
+        source = (INTEGRATION_DIR / "config_flow.py").read_text(
+            encoding="utf-8"
+        )
+        classes = {
+            node.name: {
+                child.name
+                for child in node.body
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef))
+            }
+            for node in ast.parse(source).body
+            if isinstance(node, ast.ClassDef)
+        }
+        for class_name in (
+            "EntityClaimConfigFlow",
+            "EntityClaimOptionsFlow",
+        ):
+            self.assertIn("async_step_override", classes[class_name])
 
     def test_control_policy_has_three_translated_choices(self) -> None:
         for filename in (
