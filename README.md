@@ -368,6 +368,36 @@ python -m compileall -q custom_components tests
 
 These tests cover the pure aggregation model, reconciliation decisions, requester parsing, naming rules, and integration metadata. Home Assistant lifecycle behavior, Entity Registry interaction, and service calls should still receive final validation in a real or dedicated Home Assistant instance.
 
+## Roadmap
+
+Roadmap items describe design directions and open questions. They are not promises that the capability is already available or will be implemented in a particular release.
+
+### Structured claims
+
+The next structured capabilities under consideration are:
+
+- Light brightness;
+- Fan percentage;
+- Cover position.
+
+They share one ordered aggregation model: `ANY` selects the highest requested value, while `ALL` selects the lowest requested value. Cover support must additionally distinguish normal `opening` / `closing` progress from conflicting external changes so that intermediate positions do not incorrectly start a Manual Override.
+
+Cover tilt and Valve claims are intentionally not planned. Their demand semantics are not sufficiently clear for the small, predictable Claim model used by this integration.
+
+### Automation acknowledgment of Manual Override
+
+A future extension may let an automation receive a semantic notification after Entity Claim classifies a conflicting external Source change. The automation could update its own business state or Claims and then explicitly acknowledge that the external intent has been incorporated, allowing the Manual Override to end before its configured timeout.
+
+This remains in use-case collection. In particular, the design still needs to establish:
+
+- whether notification should use a Home Assistant event or another interface;
+- the distinction between acknowledging an absorbed change and forcibly clearing an override to resume reconciliation;
+- how an acknowledgment proves that the latest aggregated desired state matches the latest actual state;
+- how correlation prevents a delayed acknowledgment from clearing a newer override;
+- how races, reloads, unavailable states, and future structured claims affect the interaction.
+
+No override event or acknowledgment action is currently provided. Manual Override continues to end through its configured timeout, followed by reconciliation against the latest desired and actual states.
+
 ## Design boundary
 
 The project intentionally keeps one small abstraction clear:
