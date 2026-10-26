@@ -7,9 +7,13 @@ from custom_components.entity_claim.model import (
     ClaimKind,
     ClaimProfile,
     ClaimState,
+    ControlPolicy,
+    ControlState,
     ReconcileAction,
     Requester,
+    ScopedSession,
     aggregate_claims,
+    aggregation_identity,
     is_conflicting_external_change,
     is_expected_position_progress,
     matches_pending_command,
@@ -107,6 +111,66 @@ class ClaimStateTests(unittest.TestCase):
                 100,
                 supports_intermediate=False,
             ).structured
+        )
+
+    def test_policy_identity_is_the_initial_no_claim_value(self) -> None:
+        any_state = ClaimState(
+            (Requester("a", "A"),),
+            AggregationPolicy.ANY,
+            ClaimProfile(ClaimKind.POSITION, 100),
+        )
+        all_state = ClaimState(
+            (Requester("a", "A"),),
+            AggregationPolicy.ALL,
+            ClaimProfile(ClaimKind.POSITION, 100),
+        )
+        self.assertEqual(any_state.get("a"), 0)
+        self.assertEqual(all_state.get("a"), 100)
+        self.assertEqual(aggregation_identity(AggregationPolicy.ANY, 100), 0)
+        self.assertEqual(aggregation_identity(AggregationPolicy.ALL, 100), 100)
+
+    def test_session_aggregation_ignores_nonparticipants(self) -> None:
+        state = ClaimState(
+            (Requester("old", "Old"), Requester("new", "New")),
+            AggregationPolicy.ANY,
+            ClaimProfile(ClaimKind.BRIGHTNESS, 255),
+        )
+        state.set("old", 200)
+        state.set("new", 80)
+        self.assertEqual(state.desired, 200)
+        self.assertEqual(state.aggregate_for(("new",)), 80)
+
+
+class ScopedSessionTests(unittest.TestCase):
+    """Verify inheritance keeps the first acquisition baseline."""
+
+    def test_holder_handoff_preserves_original_baseline(self) -> None:
+        session = ScopedSession(baseline=20, participants=["a"], owned=True)
+        session.join("b")
+        self.assertEqual(session.holder, "a")
+        session.release("a")
+        self.assertEqual(session.holder, "b")
+        self.assertEqual(session.baseline, 20)
+
+    def test_external_relinquish_clears_entire_control_chain(self) -> None:
+        session = ScopedSession(
+            baseline=0,
+            participants=["a", "b"],
+            owned=True,
+        )
+        session.clear()
+        self.assertIsNone(session.baseline)
+        self.assertEqual(session.participants, [])
+        self.assertFalse(session.owned)
+
+    def test_control_machine_values_are_stable_lowercase(self) -> None:
+        self.assertEqual(
+            {state.value for state in ControlState},
+            {"active", "applying", "passive", "restoring"},
+        )
+        self.assertEqual(
+            {policy.value for policy in ControlPolicy},
+            {"authoritative", "override", "scoped"},
         )
 
 

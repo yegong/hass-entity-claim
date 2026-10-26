@@ -60,18 +60,9 @@ class ClaimDiagnosticSensor(SensorEntity):
 
     @property
     def native_value(self) -> str:
-        """Return a compact synchronization status."""
+        """Return the normalized Controller lifecycle state."""
 
-        if (
-            self._controller.actual_value is None
-            and not self._controller.source_moving
-        ):
-            return "source_unavailable"
-        if self._controller.override_active:
-            return "manual_override"
-        if self._controller.source_moving:
-            return "source_moving"
-        return "in_sync" if self._controller.in_sync else "out_of_sync"
+        return self._controller.control_state.value
 
     @property
     def extra_state_attributes(self) -> dict[str, Any]:
@@ -111,16 +102,17 @@ class ClaimDiagnosticSensor(SensorEntity):
             "claims": claims,
             "aggregated": aggregated,
             "target": target,
-            "manual_override": {
-                "enabled": self._controller.respect_source_changes,
-                "active": self._controller.override_active,
+            "control": {
+                "policy": self._controller.control_policy.value,
+                "state": self._controller.control_state.value,
+                "desired": self._value_snapshot(
+                    self._controller.control_desired
+                ),
                 "until": (
                     override_until.isoformat() if override_until is not None else None
                 ),
                 "reason": self._controller.override_reason,
             },
-            "reconciliation_suppressed": self._controller.override_active,
-            "in_sync": self._controller.in_sync,
         }
 
     def _value_snapshot(

@@ -66,6 +66,27 @@ class MetadataTests(unittest.TestCase):
         self.assertNotIn("CoverEntityFeature.SET_TILT_POSITION", source)
         self.assertNotIn("CoverEntityFeature.STOP", source)
 
+        controller = (INTEGRATION_DIR / "controller.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("SERVICE_STOP_COVER", controller)
+        self.assertIn("CoverEntityFeature.STOP", controller)
+
+    def test_diagnostics_use_unified_control_states(self) -> None:
+        source = (INTEGRATION_DIR / "sensor.py").read_text(encoding="utf-8")
+        self.assertIn("control_state.value", source)
+        self.assertNotIn('return "in_sync"', source)
+        self.assertNotIn('return "manual_override"', source)
+
+    def test_config_entry_migrates_legacy_override_toggle(self) -> None:
+        setup = (INTEGRATION_DIR / "__init__.py").read_text(encoding="utf-8")
+        flow = (INTEGRATION_DIR / "config_flow.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("async def async_migrate_entry(", setup)
+        self.assertIn("CONF_RESPECT_SOURCE_CHANGES", setup)
+        self.assertIn("VERSION = 2", flow)
+
     def test_helpers_ui_has_an_options_flow(self) -> None:
         source = (INTEGRATION_DIR / "config_flow.py").read_text(
             encoding="utf-8"
@@ -73,8 +94,8 @@ class MetadataTests(unittest.TestCase):
         self.assertIn("async_get_options_flow", source)
         self.assertIn("OptionsFlowWithReload", source)
 
-    def test_override_configuration_is_translated_in_every_flow(self) -> None:
-        """Ensure both override settings remain editable everywhere."""
+    def test_control_configuration_is_translated_in_every_flow(self) -> None:
+        """Ensure control policy and override duration remain editable."""
 
         for filename in (
             "strings.json",
@@ -89,8 +110,22 @@ class MetadataTests(unittest.TestCase):
                 ("options", "init"),
             ):
                 data = strings[flow]["step"][step]["data"]
-                self.assertIn("respect_source_changes", data)
+                self.assertIn("control_policy", data)
                 self.assertIn("override_duration_minutes", data)
+
+    def test_control_policy_has_three_translated_choices(self) -> None:
+        for filename in (
+            "strings.json",
+            "translations/en.json",
+            "translations/zh-Hans.json",
+        ):
+            with (INTEGRATION_DIR / filename).open(encoding="utf-8") as file:
+                options = json.load(file)["selector"]["control_policy"][
+                    "options"
+                ]
+            self.assertEqual(
+                set(options), {"authoritative", "override", "scoped"}
+            )
 
     def test_each_capability_has_aggregation_copy(self) -> None:
         for filename in (

@@ -79,11 +79,11 @@ Source:  fan.example_target
 Claim:   fan.example_target_required_by_presence
 ```
 
-The Claim Entity represents only that requester's requirement:
+The Claim Entity represents only that requester's ordered requirement. Which endpoint is neutral depends on aggregation:
 
 ```text
-Claim = ON   The requester currently requires the Source Entity to be on
-Claim = OFF  The requester currently has no requirement for it to be on
+ANY / MAX: minimum is neutral; a higher value is a Claim
+ALL / MIN: maximum is neutral; a lower value is a Claim
 ```
 
 For a structured Claim, the domain attribute is part of that same desired input:
@@ -107,7 +107,7 @@ Two aggregation policies are supported across Boolean and ordered values:
 | Policy | Ordered result | Boolean `0..1` result |
 | --- | --- | --- |
 | `ANY` | Highest requested value (`MAX`) | ON when at least one Claim is ON |
-| `ALL` | Lowest requested value (`MIN`) | ON only when every Claim is ON |
+| `ALL` | Lowest requested value (`MIN`) | OFF when any Claim is OFF |
 
 When there are no requesters, the aggregate result is always OFF for both policies.
 
@@ -124,15 +124,25 @@ For example:
 
 The same policy applied to brightness requests of `180`, `80`, and `0` produces `180` for `ANY` and `0` for `ALL`.
 
+This makes an ON request the constraining Claim for `ANY`, while an OFF request is the constraining Claim for `ALL`. The opposite endpoint is that policy's no-Claim identity.
+
 ### Reconciliation
 
 When the aggregate desired value differs from the Source Entity's actual value, the integration calls the smallest applicable domain action: ON/OFF, Light brightness, Fan percentage, or Cover position.
 
 No action is called when both states already match. If the source is `unknown` or `unavailable`, reconciliation is deferred until its state becomes explicit again.
 
-### Manual Override
+### Control authority
 
-Each Config Entry can respect direct changes to its Source Entity. When enabled, an explicit external state or supported value change that conflicts with the current aggregated desired value starts a time-limited Manual Override:
+Each Config Entry selects one control policy:
+
+| Policy | Behavior |
+| --- | --- |
+| `authoritative` | Continuously reconcile the Source to the aggregate. |
+| `override` | Temporarily yield when an external change conflicts with the aggregate. |
+| `scoped` | Control and later restore only an effect Entity Claim visibly created. |
+
+With `override`, an explicit external state or supported value change that conflicts with the current aggregated desired value starts a time-limited Manual Override:
 
 ```text
 Claims → Aggregation → Desired State → Override Gate → Reconcile → Source
@@ -143,6 +153,8 @@ During the override, Claims continue to update and aggregation continues to calc
 When the period expires, the integration compares the latest desired and actual states and reconciles only if they still differ. It never restores a snapshot taken when the override began. Changes to or from `unknown` and `unavailable` do not start an override.
 
 Commands issued by Entity Claim carry their own Home Assistant Context. The Controller correlates subsequent Source state changes with that Context so its own reconciliation is not mistaken for an external override. A short-lived expected-state match is retained only as a fallback for device integrations that do not propagate Context.
+
+With `scoped`, a Claim receives control only after its Source command produces an observable, correlated change. Later Claims can join the same control session. If the first requester releases while another participant remains, control passes to that participant without replacing the original baseline. The last participant restores the state captured before the first successful Claim. Any external operation relinquishes the entire session immediately, discards that baseline, and prevents old Claims from restoring or reasserting it. A later Claim establishes a new session only if it actually changes the Source. Session provenance and its original baseline are persisted across reloads and restarts.
 
 Cover movement receives additional protection. `opening` and `closing` are treated as transient progress, not user intent. Position reports are checked against the commanded interval and direction, with a short no-Context guard and a longer pending-movement lifetime. The final explicit position is then compared with the latest aggregate.
 
@@ -158,7 +170,7 @@ The current version supports:
 - ordered `ANY = MAX` and `ALL = MIN` aggregation;
 - adding, removing, and renaming requesters;
 - restoration of Claim state;
-- time-limited Manual Override for conflicting external Source changes;
+- authoritative, time-limited override, and Claim-scoped control policies;
 - an optional Diagnostic Sensor;
 - Claim Entities that are hidden by default but remain enabled.
 
@@ -168,7 +180,7 @@ It does not currently aggregate or forward features such as:
 - Fan presets, direction, or oscillation;
 - Cover tilt, speed, or stop;
 - Valve claims;
-- requester priority or leases;
+- requester priority;
 - retry, backoff, or complex conflict arbitration.
 
 Capabilities are exposed only when both the Source supports them and their Claim aggregation semantics are defined. Cover tilt and Valve claims are intentionally excluded because their demand semantics are not sufficiently clear for this model.
@@ -192,8 +204,8 @@ Each Config Entry manages exactly one Source Entity. Configuration first asks fo
 - **Source entity**: the `cover`, `fan`, `light`, or `switch` to manage;
 - **Requester names**: one item for each independent source of demand;
 - **Aggregation policy**: `ANY = MAX` or `ALL = MIN`, described in the UI using state, brightness, speed, or position as appropriate;
-- **Respect direct changes to Source Entity**: enable the Manual Override gate;
-- **Manual Override duration**: how long reconciliation is suppressed after the latest conflicting external change;
+- **Control authority**: choose `Always managed`, `Allow manual override`, or `Claim-scoped control`;
+- **Manual Override duration**: how long reconciliation is suppressed after the latest conflicting external change when the override policy is selected;
 - **Diagnostic sensor**: whether to create the optional diagnostic entity.
 
 Enter the first requester name, then use the **Add** button to create another input. For example, add these three items:
@@ -222,7 +234,7 @@ Use **Configure** from Home Assistant's Helpers page, or **Reconfigure** on the 
 - remove a requester;
 - change a requester's name;
 - change the aggregation policy;
-- enable or disable respect for direct Source changes;
+- change the control authority policy;
 - change the Manual Override duration;
 - enable or disable the Diagnostic Sensor.
 
@@ -339,14 +351,17 @@ aggregated:
 target:
   actual_state: "off"
   brightness: 0
-manual_override:
-  enabled: true
-  active: true
+control:
+  policy: override
+  state: passive
+  desired:
+    state: "on"
+    brightness: 180
   until: "2026-10-08T08:30:00+00:00"
   reason: external_source_change
-reconciliation_suppressed: true
-in_sync: false
 ```
+
+The diagnostic sensor state is one of `active`, `applying`, `passive`, or `restoring`. `authoritative` uses `active` and `applying`; `override` additionally uses `passive`; `scoped` can use all four states. Only scoped control restores a captured baseline.
 
 The entity uses Home Assistant's diagnostic category. Creation is disabled by default; enable it in the Config Entry when needed.
 
@@ -357,7 +372,7 @@ The entity uses Home Assistant's diagnostic category. Creation is disabled by de
 - Changing the Source Entity's Friendly Name does not create a new Claim Entity.
 - A Claim Entity ID customized by the user is not forced back to the suggested ID.
 - Removing a requester removes its Claim Entity Registry entry.
-- A newly added requester starts at OFF; existing requesters restore their saved Claim states.
+- A newly added requester starts at the aggregation identity: the minimum value for `ANY`, or the maximum value for `ALL`. Existing requesters restore their saved Claim states.
 
 ## Project structure
 
@@ -367,7 +382,7 @@ custom_components/entity_claim/
 ├── config_flow.py       # Initial configuration and editing flows
 ├── capability.py        # Source capability discovery and value profiles
 ├── const.py             # Domain, platform, and configuration constants
-├── controller.py        # Aggregation, override gate, correlation, and reconciliation
+├── controller.py        # Authority policy, correlation, sessions, and reconciliation
 ├── cover.py             # cover domain adapter
 ├── entity.py            # Shared Claim Entity base class
 ├── fan.py               # fan domain adapter
@@ -396,7 +411,7 @@ Controller stores each requester's Claim
     ↓
 model.py calculates the ordered MAX / MIN aggregate
     ↓
-Controller applies the time-limited Manual Override gate
+Controller applies the configured authority policy
     ↓
 Controller calls the applicable state / value action on the Source Entity
 ```
@@ -444,11 +459,11 @@ The project intentionally keeps one small abstraction clear:
 ```text
 Independent Claims → Aggregation → Desired State
                                       ↓
-                                Override Gate
+                               Authority Policy
                                       ↓
                                   Reconcile
                                       ↓
                                 Source Actual State
 ```
 
-A Claim is a desired input, aggregation computes only the current desired state, Override controls whether reconciliation is allowed, and the Source Entity remains the canonical actual state. These roles remain separate, and no additional Aggregate Entity competes with the Source Entity.
+A Claim is a desired input, aggregation computes only the current desired state, the authority policy controls whether reconciliation is allowed and whether an effect may later be restored, and the Source Entity remains the canonical actual state. These roles remain separate, and no additional Aggregate Entity competes with the Source Entity.

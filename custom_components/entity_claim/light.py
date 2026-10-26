@@ -76,7 +76,7 @@ class ClaimLightEntity(ClaimEntityMixin, RestoreEntity, LightEntity):
         return self.claim_value
 
     async def async_turn_on(self, **kwargs: Any) -> None:
-        """Assert an ON claim, optionally with an exact brightness."""
+        """Set an ON endpoint, optionally with an exact brightness."""
 
         brightness = kwargs.pop(ATTR_BRIGHTNESS, None)
         if any(value is not None for value in kwargs.values()):

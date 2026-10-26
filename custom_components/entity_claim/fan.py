@@ -83,7 +83,7 @@ class ClaimFanEntity(ClaimEntityMixin, RestoreEntity, FanEntity):
         preset_mode: str | None = None,
         **kwargs: Any,
     ) -> None:
-        """Assert an ON claim, optionally with an exact percentage."""
+        """Set an ON endpoint, optionally with an exact percentage."""
 
         if preset_mode is not None or any(
             value is not None for value in kwargs.values()

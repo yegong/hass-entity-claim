@@ -89,7 +89,7 @@ class ClaimEntityMixin:
         )
 
     async def async_turn_on(self, *args: Any, **kwargs: Any) -> None:
-        """Assert this requester's claim."""
+        """Set this requester's Claim to the maximum endpoint."""
 
         if any(value is not None for value in args) or any(
             value is not None for value in kwargs.values()
@@ -100,7 +100,7 @@ class ClaimEntityMixin:
         await self.async_set_claim_value(self._controller.profile.maximum)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
-        """Release this requester's claim."""
+        """Set this requester's Claim to the minimum endpoint."""
 
         if any(value is not None for value in kwargs.values()):
             raise ServiceValidationError(

@@ -30,19 +30,19 @@ from homeassistant.helpers.selector import (
 from .capability import aggregation_selector_key, profile_for_source
 from .const import (
     CONF_AGGREGATION_POLICY,
+    CONF_CONTROL_POLICY,
     CONF_DIAGNOSTIC_SENSOR_ENABLED,
     CONF_OVERRIDE_DURATION_MINUTES,
     CONF_REQUESTERS,
-    CONF_RESPECT_SOURCE_CHANGES,
     CONF_TARGET_ENTITY_ID,
     DEFAULT_AGGREGATION_POLICY,
+    DEFAULT_CONTROL_POLICY,
     DEFAULT_DIAGNOSTIC_SENSOR_ENABLED,
     DEFAULT_OVERRIDE_DURATION_MINUTES,
-    DEFAULT_RESPECT_SOURCE_CHANGES,
     DOMAIN,
     SUPPORTED_DOMAINS,
 )
-from .model import AggregationPolicy, ClaimProfile, Requester
+from .model import AggregationPolicy, ClaimProfile, ControlPolicy, Requester
 from .registry import find_entity_id_conflict
 from .schema import (
     RequesterParseError,
@@ -107,13 +107,15 @@ def _configuration_schema(
     ] = BooleanSelector()
     schema[
         probatio.Required(
-            CONF_RESPECT_SOURCE_CHANGES,
-            default=defaults.get(
-                CONF_RESPECT_SOURCE_CHANGES,
-                DEFAULT_RESPECT_SOURCE_CHANGES,
-            ),
+            CONF_CONTROL_POLICY,
+            default=defaults.get(CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY),
         )
-    ] = BooleanSelector()
+    ] = SelectSelector(
+        SelectSelectorConfig(
+            options=[policy.value for policy in ControlPolicy],
+            translation_key="control_policy",
+        )
+    )
     schema[
         probatio.Required(
             CONF_OVERRIDE_DURATION_MINUTES,
@@ -218,9 +220,7 @@ def _entry_data(
         CONF_DIAGNOSTIC_SENSOR_ENABLED: bool(
             user_input[CONF_DIAGNOSTIC_SENSOR_ENABLED]
         ),
-        CONF_RESPECT_SOURCE_CHANGES: bool(
-            user_input[CONF_RESPECT_SOURCE_CHANGES]
-        ),
+        CONF_CONTROL_POLICY: user_input[CONF_CONTROL_POLICY],
         CONF_OVERRIDE_DURATION_MINUTES: int(
             user_input[CONF_OVERRIDE_DURATION_MINUTES]
         ),
@@ -230,7 +230,7 @@ def _entry_data(
 class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     """Configure one independently managed source entity."""
 
-    VERSION = 1
+    VERSION = 2
 
     _target_entity_id: str | None = None
 
@@ -348,9 +348,8 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             CONF_DIAGNOSTIC_SENSOR_ENABLED: entry.data[
                 CONF_DIAGNOSTIC_SENSOR_ENABLED
             ],
-            CONF_RESPECT_SOURCE_CHANGES: entry.data.get(
-                CONF_RESPECT_SOURCE_CHANGES,
-                DEFAULT_RESPECT_SOURCE_CHANGES,
+            CONF_CONTROL_POLICY: entry.data.get(
+                CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY
             ),
             CONF_OVERRIDE_DURATION_MINUTES: entry.data.get(
                 CONF_OVERRIDE_DURATION_MINUTES,
@@ -440,9 +439,8 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
             CONF_DIAGNOSTIC_SENSOR_ENABLED: entry.data[
                 CONF_DIAGNOSTIC_SENSOR_ENABLED
             ],
-            CONF_RESPECT_SOURCE_CHANGES: entry.data.get(
-                CONF_RESPECT_SOURCE_CHANGES,
-                DEFAULT_RESPECT_SOURCE_CHANGES,
+            CONF_CONTROL_POLICY: entry.data.get(
+                CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY
             ),
             CONF_OVERRIDE_DURATION_MINUTES: entry.data.get(
                 CONF_OVERRIDE_DURATION_MINUTES,

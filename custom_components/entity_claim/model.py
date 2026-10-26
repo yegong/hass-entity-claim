@@ -6,7 +6,7 @@ tested without installing Home Assistant.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 
 
@@ -15,6 +15,23 @@ class AggregationPolicy(StrEnum):
 
     ANY = "any"
     ALL = "all"
+
+
+class ControlPolicy(StrEnum):
+    """How reconciliation authority is granted for a Config Entry."""
+
+    AUTHORITATIVE = "authoritative"
+    OVERRIDE = "override"
+    SCOPED = "scoped"
+
+
+class ControlState(StrEnum):
+    """User-visible Controller lifecycle states."""
+
+    ACTIVE = "active"
+    APPLYING = "applying"
+    PASSIVE = "passive"
+    RESTORING = "restoring"
 
 
 class ClaimKind(StrEnum):
@@ -63,6 +80,42 @@ class Requester:
     name: str
 
 
+@dataclass(slots=True)
+class ScopedSession:
+    """One continuous control chain shared by participating Claims."""
+
+    baseline: int | None = None
+    participants: list[str] = field(default_factory=list)
+    owned: bool = False
+    restoring: bool = False
+
+    @property
+    def holder(self) -> str | None:
+        """Return the oldest participant in the uninterrupted session."""
+
+        return self.participants[0] if self.participants else None
+
+    def join(self, requester_id: str) -> None:
+        """Add a successor without changing the original baseline."""
+
+        if requester_id not in self.participants:
+            self.participants.append(requester_id)
+
+    def release(self, requester_id: str) -> None:
+        """Release one participant and hand control to the next in order."""
+
+        if requester_id in self.participants:
+            self.participants.remove(requester_id)
+
+    def clear(self) -> None:
+        """Relinquish the complete session without restoring its baseline."""
+
+        self.baseline = None
+        self.participants.clear()
+        self.owned = False
+        self.restoring = False
+
+
 def aggregate_claims(
     claims: dict[str, int | bool], policy: AggregationPolicy
 ) -> int:
@@ -76,6 +129,14 @@ def aggregate_claims(
         return 0
     values = (int(value) for value in claims.values())
     return max(values) if policy is AggregationPolicy.ANY else min(values)
+
+
+def aggregation_identity(
+    policy: AggregationPolicy, maximum: int
+) -> int:
+    """Return the value that contributes no restriction to aggregation."""
+
+    return 0 if policy is AggregationPolicy.ANY else maximum
 
 
 def values_match(
@@ -195,9 +256,10 @@ class ClaimState:
         policy: AggregationPolicy,
         profile: ClaimProfile | None = None,
     ) -> None:
-        self._claims = {requester.id: 0 for requester in requesters}
         self._policy = policy
         self._profile = profile or ClaimProfile(ClaimKind.BINARY, 1)
+        neutral = aggregation_identity(policy, self._profile.maximum)
+        self._claims = {requester.id: neutral for requester in requesters}
 
     @property
     def policy(self) -> AggregationPolicy:
@@ -216,6 +278,24 @@ class ClaimState:
         """Return the current aggregated desired value."""
 
         return aggregate_claims(self._claims, self._policy)
+
+    @property
+    def neutral(self) -> int:
+        """Return the no-Claim value for the selected aggregation policy."""
+
+        return aggregation_identity(self._policy, self._profile.maximum)
+
+    def aggregate_for(self, requester_ids: tuple[str, ...]) -> int:
+        """Aggregate only the requesters participating in a control session."""
+
+        selected = {
+            requester_id: self._claims[requester_id]
+            for requester_id in requester_ids
+            if requester_id in self._claims
+        }
+        if not selected:
+            return self.neutral
+        return aggregate_claims(selected, self._policy)
 
     @property
     def claims(self) -> dict[str, int]:

@@ -25,18 +25,18 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from .capability import profile_for_source
     from .const import (
         CONF_AGGREGATION_POLICY,
+        CONF_CONTROL_POLICY,
         CONF_DIAGNOSTIC_SENSOR_ENABLED,
         CONF_OVERRIDE_DURATION_MINUTES,
         CONF_REQUESTERS,
-        CONF_RESPECT_SOURCE_CHANGES,
         CONF_TARGET_ENTITY_ID,
+        DEFAULT_CONTROL_POLICY,
         DEFAULT_OVERRIDE_DURATION_MINUTES,
-        DEFAULT_RESPECT_SOURCE_CHANGES,
         DOMAIN,
         SUPPORTED_DOMAINS,
     )
     from .controller import EntityClaimController, EntityClaimRuntime
-    from .model import AggregationPolicy
+    from .model import AggregationPolicy, ControlPolicy
     from .registry import (
         diagnostic_unique_id,
         existing_requester_ids,
@@ -98,11 +98,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         lambda coroutine, name: entry.async_create_task(
             hass, coroutine, name
         ),
-        respect_source_changes=bool(
-            entry.data.get(
-                CONF_RESPECT_SOURCE_CHANGES,
-                DEFAULT_RESPECT_SOURCE_CHANGES,
-            )
+        control_policy=ControlPolicy(
+            entry.data.get(CONF_CONTROL_POLICY, DEFAULT_CONTROL_POLICY)
         ),
         override_duration=timedelta(
             minutes=int(
@@ -112,7 +109,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 )
             )
         ),
+        config_entry_id=entry.entry_id,
     )
+    await controller.async_load()
     entry.runtime_data = EntityClaimRuntime(
         controller=controller,
         requesters=requesters,
@@ -166,3 +165,49 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not unload_ok:
         await runtime.controller.async_start()
     return unload_ok
+
+
+async def async_migrate_entry(
+    hass: HomeAssistant, entry: ConfigEntry
+) -> bool:
+    """Migrate the former Manual Override toggle to a control policy."""
+
+    if entry.version > 2:
+        return False
+    if entry.version < 2:
+        from .const import (
+            CONF_CONTROL_POLICY,
+            CONF_RESPECT_SOURCE_CHANGES,
+            DEFAULT_RESPECT_SOURCE_CHANGES,
+        )
+        from .model import ControlPolicy
+
+        data = dict(entry.data)
+        respect_source_changes = bool(
+            data.pop(
+                CONF_RESPECT_SOURCE_CHANGES,
+                DEFAULT_RESPECT_SOURCE_CHANGES,
+            )
+        )
+        data[CONF_CONTROL_POLICY] = (
+            ControlPolicy.OVERRIDE.value
+            if respect_source_changes
+            else ControlPolicy.AUTHORITATIVE.value
+        )
+        hass.config_entries.async_update_entry(entry, data=data, version=2)
+    return True
+
+
+async def async_remove_entry(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Remove persisted scoped control provenance with the Config Entry."""
+
+    from homeassistant.helpers.storage import Store
+
+    from .const import CONTROL_STORAGE_VERSION, DOMAIN
+
+    store = Store[dict[str, Any]](
+        hass,
+        CONTROL_STORAGE_VERSION,
+        f"{DOMAIN}.{entry.entry_id}.control",
+    )
+    await store.async_remove()
