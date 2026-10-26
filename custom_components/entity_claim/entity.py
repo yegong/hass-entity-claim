@@ -1,11 +1,11 @@
-"""Shared Boolean Claim Entity adapter."""
+"""Shared Claim Entity adapter."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from homeassistant.const import STATE_ON
-from homeassistant.core import callback
+from homeassistant.core import State, callback
 from homeassistant.exceptions import ServiceValidationError
 from homeassistant.helpers.device_registry import AnyDeviceEntry
 
@@ -16,7 +16,7 @@ from .schema import claim_entity_id
 
 
 class ClaimEntityMixin:
-    """Map a domain entity's ON/OFF API to one persistent logical claim."""
+    """Map a domain entity API to one persistent logical claim."""
 
     _attr_should_poll = False
     _attr_entity_registry_enabled_default = True
@@ -51,10 +51,16 @@ class ClaimEntityMixin:
     def is_on(self) -> bool:
         """Return only this requester's desired claim state."""
 
+        return self.claim_value > 0
+
+    @property
+    def claim_value(self) -> int:
+        """Return this requester's ordered claim value."""
+
         return self._controller.state.get(self._requester.id)
 
     @property
-    def extra_state_attributes(self) -> dict[str, str]:
+    def extra_state_attributes(self) -> dict[str, str | int]:
         """Expose stable claim identity and target for observability."""
 
         return {
@@ -62,6 +68,8 @@ class ClaimEntityMixin:
             "requester_id": self._requester.id,
             "requester_name": self._requester.name,
             "aggregation_policy": self._controller.state.policy.value,
+            "claim_kind": self._controller.profile.kind.value,
+            "claim_value": self.claim_value,
         }
 
     async def async_added_to_hass(self) -> None:
@@ -73,7 +81,7 @@ class ClaimEntityMixin:
             if restored is not None:
                 await self._controller.async_set_claim(
                     self._requester.id,
-                    restored.state == STATE_ON,
+                    self._restored_claim_value(restored),
                     reconcile=False,
                 )
         self.async_on_remove(  # type: ignore[attr-defined]
@@ -87,18 +95,32 @@ class ClaimEntityMixin:
             value is not None for value in kwargs.values()
         ):
             raise ServiceValidationError(
-                "Entity Claim currently supports only Boolean turn_on semantics"
+                "This Entity Claim does not support additional turn_on parameters"
             )
-        await self._controller.async_set_claim(self._requester.id, True)
+        await self.async_set_claim_value(self._controller.profile.maximum)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Release this requester's claim."""
 
         if any(value is not None for value in kwargs.values()):
             raise ServiceValidationError(
-                "Entity Claim currently supports only Boolean turn_off semantics"
+                "This Entity Claim does not support additional turn_off parameters"
             )
-        await self._controller.async_set_claim(self._requester.id, False)
+        await self.async_set_claim_value(0)
+
+    async def async_set_claim_value(self, value: int | float) -> None:
+        """Store one normalized desired input and reconcile the aggregate."""
+
+        await self._controller.async_set_claim(self._requester.id, value)
+
+    def _restored_claim_value(self, restored: State) -> int:
+        """Restore a Boolean claim; structured adapters override this."""
+
+        return (
+            self._controller.profile.maximum
+            if restored.state == STATE_ON
+            else 0
+        )
 
     @callback
     def _handle_controller_update(self) -> None:

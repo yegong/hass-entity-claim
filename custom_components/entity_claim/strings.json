@@ -3,10 +3,19 @@
   "config": {
     "step": {
       "user": {
-        "title": "Configure entity claims",
-        "description": "Create one Claim Entity for each requester.\n\n{error_detail}",
+        "title": "Select a Source Entity",
+        "description": "Choose the existing entity whose actual state Entity Claim will control.",
         "data": {
-          "target_entity_id": "Source entity",
+          "target_entity_id": "Source entity"
+        },
+        "data_description": {
+          "target_entity_id": "Supported domains are cover, fan, light, and switch."
+        }
+      },
+      "claims": {
+        "title": "Configure entity claims",
+        "description": "Create one Claim Entity for each requester of `{target_entity_id}`.\n\n{error_detail}",
+        "data": {
           "requesters": "Requester names",
           "aggregation_policy": "Aggregation policy",
           "diagnostic_sensor_enabled": "Create diagnostic sensor",
@@ -14,10 +23,9 @@
           "override_duration_minutes": "Manual Override duration"
         },
         "data_description": {
-          "target_entity_id": "The original entity whose actual state will be controlled.",
-          "aggregation_policy": "How the current Boolean claims are combined.",
+          "aggregation_policy": "How ordered requests are combined. The available wording matches the Source capability.",
           "diagnostic_sensor_enabled": "Adds one read-only diagnostic sensor for this source.",
-          "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state.",
+          "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state. Normal Cover travel toward a target is not treated as an override.",
           "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change."
         }
       },
@@ -32,7 +40,7 @@
           "override_duration_minutes": "Manual Override duration"
         },
         "data_description": {
-          "aggregation_policy": "How the current Boolean claims are combined.",
+          "aggregation_policy": "How ordered requests are combined. The available wording matches the Source capability.",
           "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor.",
           "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state.",
           "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change."
@@ -48,7 +56,7 @@
     },
     "error": {
       "target_not_found": "The selected source entity is not currently available.",
-      "unsupported_domain": "Only fan, light, and switch source entities are currently supported.",
+      "unsupported_domain": "Only cover, fan, light, and switch source entities are currently supported.",
       "claim_cannot_be_target": "A Claim Entity cannot be managed as a source entity.",
       "requester_required": "Add at least one requester.",
       "invalid_requesters": "One or more requester names could not be used. See the detail above.",
@@ -73,7 +81,7 @@
           "override_duration_minutes": "Manual Override duration"
         },
         "data_description": {
-          "aggregation_policy": "How the current Boolean claims are combined.",
+          "aggregation_policy": "How ordered requests are combined. The available wording matches the Source capability.",
           "diagnostic_sensor_enabled": "Adds or removes the read-only diagnostic sensor.",
           "respect_source_changes": "Temporarily pauses reconciliation when an external change conflicts with the aggregated desired state.",
           "override_duration_minutes": "Minutes to suppress reconciliation after the latest conflicting external change."
@@ -89,7 +97,7 @@
     },
     "error": {
       "target_not_found": "The source entity is not currently available.",
-      "unsupported_domain": "Only fan, light, and switch source entities are currently supported.",
+      "unsupported_domain": "Only cover, fan, light, and switch source entities are currently supported.",
       "claim_cannot_be_target": "A Claim Entity cannot be managed as a source entity.",
       "invalid_requesters": "One or more requester names could not be used. See the detail above.",
       "entity_id_conflict": "A generated Entity ID is already occupied. The conflicting ID is shown above; remove or rename that entity and try again."
@@ -99,14 +107,37 @@
     }
   },
   "selector": {
-    "aggregation_policy": {
+    "aggregation_policy_binary": {
       "options": {
-        "any": "ANY — at least one claim is on",
-        "all": "ALL — every configured claim is on"
+        "any": "ANY — turn on when any requester requires it",
+        "all": "ALL — turn on only when every requester requires it"
+      }
+    },
+    "aggregation_policy_brightness": {
+      "options": {
+        "any": "ANY — use the highest requested brightness",
+        "all": "ALL — use the lowest mutually accepted brightness"
+      }
+    },
+    "aggregation_policy_percentage": {
+      "options": {
+        "any": "ANY — use the highest requested speed",
+        "all": "ALL — use the lowest mutually accepted speed"
+      }
+    },
+    "aggregation_policy_position": {
+      "options": {
+        "any": "ANY — use the highest requested position",
+        "all": "ALL — use the lowest mutually accepted position"
       }
     }
   },
   "entity": {
+    "cover": {
+      "claim": {
+        "name": "{source_name} Required by {requester_name}"
+      }
+    },
     "fan": {
       "claim": {
         "name": "{source_name} Required by {requester_name}"

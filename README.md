@@ -6,11 +6,11 @@ It models more than a one-time command. A claim means: **keep this target in the
 
 ```text
 Presence Claim ─┐
-Schedule Claim ─┼─> Aggregate (ANY / ALL) ─> Source Entity
+Schedule Claim ─┼─> Aggregate (ANY = MAX / ALL = MIN) ─> Source Entity
 Safety Claim   ─┘
 ```
 
-The current version supports Boolean ON/OFF claims for `fan`, `light`, and `switch` entities.
+The current version supports `switch`, `light`, `fan`, and `cover` Source Entities. Boolean state is the `0..1` form of the same ordered model used for Light brightness (`0..255`), Fan percentage (`0..100`), and Cover position (`0..100`).
 
 ## The problem
 
@@ -42,12 +42,12 @@ Each business flow manages only its own claim. The integration stores those clai
 
 - Keep automations decoupled so each one manages only its own requirement.
 - Clearly separate desired Claim state from actual Source Entity state.
-- Provide simple and predictable `ANY` and `ALL` aggregation policies.
+- Provide one predictable ordered model: `ANY` selects the maximum request and `ALL` selects the minimum request.
 - Control the original Source Entity without creating a competing proxy entity.
 - Keep requester identities and Entity Registry entries stable.
 - Make claims observable, persistent, and accessible to automations and Node-RED.
 - Expose only capabilities with explicitly defined aggregation semantics.
-- Leave a clear path for structured claims without over-designing the initial version.
+- Support a small set of ordered structured claims without turning the integration into a general policy engine.
 
 ## Core concepts
 
@@ -79,11 +79,19 @@ Source:  fan.example_target
 Claim:   fan.example_target_required_by_presence
 ```
 
-The Claim Entity state represents only that requester's requirement:
+The Claim Entity represents only that requester's requirement:
 
 ```text
 Claim = ON   The requester currently requires the Source Entity to be on
 Claim = OFF  The requester currently has no requirement for it to be on
+```
+
+For a structured Claim, the domain attribute is part of that same desired input:
+
+```text
+Light Claim = ON @ brightness 160
+Fan Claim   = ON @ percentage 70
+Cover Claim = position 40
 ```
 
 A claim is not the device's actual state. A claim can remain `on` while `fan.example_target` is temporarily `off`; the integration will reconcile the source from the stored desired state.
@@ -94,12 +102,12 @@ When the Source Entity belongs to a Device, its Claim Entities and optional Diag
 
 The integration combines all Claim states into an internal desired state. It does not create an additional Aggregate Entity by default.
 
-Two aggregation policies are supported:
+Two aggregation policies are supported across Boolean and ordered values:
 
-| Policy | Result is ON when |
-| --- | --- |
-| `ANY` | At least one Claim is ON |
-| `ALL` | Every Claim is ON |
+| Policy | Ordered result | Boolean `0..1` result |
+| --- | --- | --- |
+| `ANY` | Highest requested value (`MAX`) | ON when at least one Claim is ON |
+| `ALL` | Lowest requested value (`MIN`) | ON only when every Claim is ON |
 
 When there are no requesters, the aggregate result is always OFF for both policies.
 
@@ -111,18 +119,20 @@ For example:
 | Schedule | OFF |
 | Air Quality | ON |
 
-- `ANY` produces ON.
-- `ALL` produces OFF.
+- `ANY` produces ON (`MAX(1, 0, 1) = 1`).
+- `ALL` produces OFF (`MIN(1, 0, 1) = 0`).
+
+The same policy applied to brightness requests of `180`, `80`, and `0` produces `180` for `ANY` and `0` for `ALL`.
 
 ### Reconciliation
 
-When the aggregate desired state differs from the Source Entity's actual state, the integration calls the domain's `turn_on` or `turn_off` action to bring the source back to the desired state.
+When the aggregate desired value differs from the Source Entity's actual value, the integration calls the smallest applicable domain action: ON/OFF, Light brightness, Fan percentage, or Cover position.
 
 No action is called when both states already match. If the source is `unknown` or `unavailable`, reconciliation is deferred until its state becomes explicit again.
 
 ### Manual Override
 
-Each Config Entry can respect direct changes to its Source Entity. When enabled, an explicit external ON/OFF change that conflicts with the current aggregated desired state starts a time-limited Manual Override:
+Each Config Entry can respect direct changes to its Source Entity. When enabled, an explicit external state or supported value change that conflicts with the current aggregated desired value starts a time-limited Manual Override:
 
 ```text
 Claims → Aggregation → Desired State → Override Gate → Reconcile → Source
@@ -134,27 +144,34 @@ When the period expires, the integration compares the latest desired and actual 
 
 Commands issued by Entity Claim carry their own Home Assistant Context. The Controller correlates subsequent Source state changes with that Context so its own reconciliation is not mistaken for an external override. A short-lived expected-state match is retained only as a fallback for device integrations that do not propagate Context.
 
+Cover movement receives additional protection. `opening` and `closing` are treated as transient progress, not user intent. Position reports are checked against the commanded interval and direction, with a short no-Context guard and a longer pending-movement lifetime. The final explicit position is then compared with the latest aggregate.
+
 ## Current scope
 
 The current version supports:
 
-- Source domains: `fan`, `light`, and `switch`;
-- Boolean ON/OFF claims;
-- `ANY` and `ALL` aggregation;
+- Source domains: `cover`, `fan`, `light`, and `switch`;
+- Boolean ON/OFF claims for binary Sources;
+- Light brightness when supported by the Source;
+- Fan percentage when supported by the Source;
+- Cover open/close and position when supported by the Source;
+- ordered `ANY = MAX` and `ALL = MIN` aggregation;
 - adding, removing, and renaming requesters;
 - restoration of Claim state;
 - time-limited Manual Override for conflicting external Source changes;
 - an optional Diagnostic Sensor;
 - Claim Entities that are hidden by default but remain enabled.
 
-It does not currently aggregate or forward structured features such as:
+It does not currently aggregate or forward features such as:
 
-- fan percentage;
-- light brightness, color, or color temperature;
+- Light color or color temperature;
+- Fan presets, direction, or oscillation;
+- Cover tilt, speed, or stop;
+- Valve claims;
 - requester priority or leases;
 - retry, backoff, or complex conflict arbitration.
 
-Such capabilities should be added only after their aggregation semantics are clearly defined. A feature supported by the Source Entity is not automatically exposed by its Claim Entities.
+Capabilities are exposed only when both the Source supports them and their Claim aggregation semantics are defined. Cover tilt and Valve claims are intentionally excluded because their demand semantics are not sufficiently clear for this model.
 
 ## Installation
 
@@ -170,11 +187,11 @@ Such capabilities should be added only after their aggregation semantics are cle
 
 ## Configuration
 
-Each Config Entry manages exactly one Source Entity. When adding the integration, configure:
+Each Config Entry manages exactly one Source Entity. Configuration first asks for the Source so the second step can show capability-specific aggregation wording. Configure:
 
-- **Source entity**: the `fan`, `light`, or `switch` to manage;
+- **Source entity**: the `cover`, `fan`, `light`, or `switch` to manage;
 - **Requester names**: one item for each independent source of demand;
-- **Aggregation policy**: `ANY` or `ALL`;
+- **Aggregation policy**: `ANY = MAX` or `ALL = MIN`, described in the UI using state, brightness, speed, or position as appropriate;
 - **Respect direct changes to Source Entity**: enable the Manual Override gate;
 - **Manual Override duration**: how long reconciliation is suppressed after the latest conflicting external change;
 - **Diagnostic sensor**: whether to create the optional diagnostic entity.
@@ -257,6 +274,33 @@ Here, `turn_off` only means that Presence no longer requires the fan to be on. I
 
 For `light` and `switch` claims, use their matching domain actions: `light.turn_on` / `light.turn_off` or `switch.turn_on` / `switch.turn_off`.
 
+Structured Claim Entities accept only the capability whose aggregation semantics are defined. For example:
+
+```yaml
+# Request brightness 160. Under ANY, this competes by MAX.
+- action: light.turn_on
+  target:
+    entity_id: light.example_required_by_reading
+  data:
+    brightness: 160
+
+# Request 70 percent fan speed.
+- action: fan.set_percentage
+  target:
+    entity_id: fan.example_required_by_air_quality
+  data:
+    percentage: 70
+
+# Request a 40 percent open Cover position.
+- action: cover.set_cover_position
+  target:
+    entity_id: cover.example_required_by_daylight
+  data:
+    position: 40
+```
+
+Calling `turn_on`, `fan.turn_on`, or `cover.open_cover` without an ordered value asserts the maximum value. Turning off or closing asserts zero. A Claim Entity does not expose Light color, Fan presets, Cover tilt, or other unsupported Source features.
+
 Node-RED and other tools that call Home Assistant actions follow the same model: each business flow controls its own Claim Entity instead of directly turning the Source Entity off when that flow's condition ends.
 
 ## Hidden Claim Entities
@@ -278,18 +322,23 @@ When enabled, each Config Entry creates at most one Diagnostic Sensor. It does n
 Its data includes information similar to:
 
 ```yaml
-target_entity: fan.example_target
+target_entity: light.example_target
 aggregation:
   state: any
+  ordered_value: max
 claims:
   presence:
     state: "on"
+    brightness: 180
   schedule:
     state: "off"
+    brightness: 0
 aggregated:
   state: "on"
+  brightness: 180
 target:
   actual_state: "off"
+  brightness: 0
 manual_override:
   enabled: true
   active: true
@@ -316,8 +365,10 @@ The entity uses Home Assistant's diagnostic category. Creation is disabled by de
 custom_components/entity_claim/
 ├── __init__.py          # Config Entry setup, unload, and reconfiguration
 ├── config_flow.py       # Initial configuration and editing flows
+├── capability.py        # Source capability discovery and value profiles
 ├── const.py             # Domain, platform, and configuration constants
 ├── controller.py        # Aggregation, override gate, correlation, and reconciliation
+├── cover.py             # cover domain adapter
 ├── entity.py            # Shared Claim Entity base class
 ├── fan.py               # fan domain adapter
 ├── light.py             # light domain adapter
@@ -343,14 +394,14 @@ Config Entry
     ↓
 Controller stores each requester's Claim
     ↓
-model.py calculates the aggregate and reconciliation decision
+model.py calculates the ordered MAX / MIN aggregate
     ↓
 Controller applies the time-limited Manual Override gate
     ↓
-Controller calls turn_on / turn_off on the Source Entity
+Controller calls the applicable state / value action on the Source Entity
 ```
 
-`fan.py`, `light.py`, and `switch.py` are thin Home Assistant domain adapters. Aggregation behavior is centralized in the shared model and controller so it is not duplicated across platforms.
+`cover.py`, `fan.py`, `light.py`, and `switch.py` are thin Home Assistant domain adapters. Capability discovery, aggregation, movement correlation, and reconciliation remain centralized instead of being copied across platforms.
 
 ## Local testing
 
@@ -366,23 +417,11 @@ You can also verify that all Python modules compile:
 python -m compileall -q custom_components tests
 ```
 
-These tests cover the pure aggregation model, reconciliation decisions, requester parsing, naming rules, and integration metadata. Home Assistant lifecycle behavior, Entity Registry interaction, and service calls should still receive final validation in a real or dedicated Home Assistant instance.
+These tests cover Boolean and ordered aggregation, tolerance rules, Cover movement intervals, reconciliation decisions, requester parsing, naming rules, and integration metadata. Home Assistant lifecycle behavior, Entity Registry interaction, and service calls should still receive final validation in a real or dedicated Home Assistant instance.
 
 ## Roadmap
 
 Roadmap items describe design directions and open questions. They are not promises that the capability is already available or will be implemented in a particular release.
-
-### Structured claims
-
-The next structured capabilities under consideration are:
-
-- Light brightness;
-- Fan percentage;
-- Cover position.
-
-They share one ordered aggregation model: `ANY` selects the highest requested value, while `ALL` selects the lowest requested value. Cover support must additionally distinguish normal `opening` / `closing` progress from conflicting external changes so that intermediate positions do not incorrectly start a Manual Override.
-
-Cover tilt and Valve claims are intentionally not planned. Their demand semantics are not sufficiently clear for the small, predictable Claim model used by this integration.
 
 ### Automation acknowledgment of Manual Override
 

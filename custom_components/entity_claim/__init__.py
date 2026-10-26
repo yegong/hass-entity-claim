@@ -22,6 +22,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     from homeassistant.helpers import entity_registry as er
     from homeassistant.helpers.device import async_entity_id_to_device
 
+    from .capability import profile_for_source
     from .const import (
         CONF_AGGREGATION_POLICY,
         CONF_DIAGNOSTIC_SENSOR_ENABLED,
@@ -93,6 +94,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         target_entity_id,
         requesters,
         AggregationPolicy(entry.data[CONF_AGGREGATION_POLICY]),
+        profile_for_source(target_domain, source_state.attributes),
         lambda coroutine, name: entry.async_create_task(
             hass, coroutine, name
         ),

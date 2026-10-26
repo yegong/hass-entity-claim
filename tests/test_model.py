@@ -4,13 +4,17 @@ import unittest
 
 from custom_components.entity_claim.model import (
     AggregationPolicy,
+    ClaimKind,
+    ClaimProfile,
     ClaimState,
     ReconcileAction,
     Requester,
     aggregate_claims,
     is_conflicting_external_change,
+    is_expected_position_progress,
     matches_pending_command,
     reconcile_action,
+    values_match,
 )
 
 
@@ -39,6 +43,24 @@ class AggregateClaimsTests(unittest.TestCase):
         self.assertFalse(aggregate_claims({}, AggregationPolicy.ANY))
         self.assertFalse(aggregate_claims({}, AggregationPolicy.ALL))
 
+    def test_any_is_max_for_ordered_claims(self) -> None:
+        self.assertEqual(
+            aggregate_claims(
+                {"reading": 80, "relaxing": 35, "away": 0},
+                AggregationPolicy.ANY,
+            ),
+            80,
+        )
+
+    def test_all_is_min_for_ordered_claims(self) -> None:
+        self.assertEqual(
+            aggregate_claims(
+                {"reading": 80, "relaxing": 35, "away": 0},
+                AggregationPolicy.ALL,
+            ),
+            0,
+        )
+
 
 class ClaimStateTests(unittest.TestCase):
     """Verify requester isolation and aggregation ownership."""
@@ -64,6 +86,52 @@ class ClaimStateTests(unittest.TestCase):
         snapshot = state.claims
         snapshot["a"] = True
         self.assertFalse(state.get("a"))
+
+    def test_structured_claims_are_normalized_and_aggregated(self) -> None:
+        state = ClaimState(
+            (Requester("a", "A"), Requester("b", "B")),
+            AggregationPolicy.ANY,
+            ClaimProfile(ClaimKind.PERCENTAGE, 100),
+        )
+        self.assertTrue(state.set("a", 40))
+        self.assertTrue(state.set("b", 120))
+        self.assertEqual(state.get("b"), 100)
+        self.assertEqual(state.desired, 100)
+
+    def test_profile_distinguishes_binary_and_structured_capabilities(self) -> None:
+        self.assertFalse(ClaimProfile(ClaimKind.BINARY, 1).structured)
+        self.assertTrue(ClaimProfile(ClaimKind.BRIGHTNESS, 255).structured)
+        self.assertFalse(
+            ClaimProfile(
+                ClaimKind.POSITION,
+                100,
+                supports_intermediate=False,
+            ).structured
+        )
+
+
+class OrderedValueTests(unittest.TestCase):
+    """Verify tolerance and Cover progress stay explicit and predictable."""
+
+    def test_tolerance_never_equates_off_and_on(self) -> None:
+        self.assertTrue(values_match(50, 48, tolerance=2))
+        self.assertFalse(values_match(0, 1, tolerance=10))
+
+    def test_cover_progress_accepts_commanded_direction(self) -> None:
+        self.assertTrue(
+            is_expected_position_progress(20, 40, 65, 80, tolerance=2)
+        )
+        self.assertTrue(
+            is_expected_position_progress(80, 60, 42, 20, tolerance=2)
+        )
+
+    def test_cover_progress_rejects_reversal_or_interval_escape(self) -> None:
+        self.assertFalse(
+            is_expected_position_progress(20, 50, 35, 80, tolerance=2)
+        )
+        self.assertFalse(
+            is_expected_position_progress(20, 50, 90, 80, tolerance=2)
+        )
 
 
 class ReconcileActionTests(unittest.TestCase):

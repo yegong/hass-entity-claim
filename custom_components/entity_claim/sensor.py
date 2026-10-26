@@ -12,6 +12,7 @@ from homeassistant.helpers.device_registry import AnyDeviceEntry
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .controller import EntityClaimController, EntityClaimRuntime
+from .model import ClaimKind
 from .registry import diagnostic_unique_id
 from .schema import diagnostic_entity_id
 
@@ -61,10 +62,15 @@ class ClaimDiagnosticSensor(SensorEntity):
     def native_value(self) -> str:
         """Return a compact synchronization status."""
 
-        if self._controller.actual_boolean is None:
+        if (
+            self._controller.actual_value is None
+            and not self._controller.source_moving
+        ):
             return "source_unavailable"
         if self._controller.override_active:
             return "manual_override"
+        if self._controller.source_moving:
+            return "source_moving"
         return "in_sync" if self._controller.in_sync else "out_of_sync"
 
     @property
@@ -73,24 +79,38 @@ class ClaimDiagnosticSensor(SensorEntity):
 
         source = self._controller.actual_state
         override_until = self._controller.override_until
+        claims = {
+            requester.id: self._value_snapshot(
+                self._controller.state.get(requester.id),
+                name=requester.name,
+            )
+            for requester in self._controller.requesters
+        }
+        aggregated = self._value_snapshot(self._controller.desired)
+        target = {"actual_state": source.state if source else None}
+        if (
+            self._controller.actual_value is not None
+            and self._controller.profile.kind is not ClaimKind.BINARY
+        ):
+            target[self._controller.profile.kind.value] = (
+                self._controller.actual_value
+            )
+        if self._controller.source_moving:
+            target["moving"] = True
+
         return {
             "target_entity": self._controller.target_entity_id,
-            "aggregation": {"state": self._controller.state.policy.value},
-            "claims": {
-                requester.id: {
-                    "name": requester.name,
-                    "state": (
-                        STATE_ON
-                        if self._controller.state.get(requester.id)
-                        else STATE_OFF
-                    ),
-                }
-                for requester in self._controller.requesters
+            "aggregation": {
+                "state": self._controller.state.policy.value,
+                "ordered_value": (
+                    "max"
+                    if self._controller.state.policy.value == "any"
+                    else "min"
+                ),
             },
-            "aggregated": {
-                "state": STATE_ON if self._controller.desired else STATE_OFF
-            },
-            "target": {"actual_state": source.state if source else None},
+            "claims": claims,
+            "aggregated": aggregated,
+            "target": target,
             "manual_override": {
                 "enabled": self._controller.respect_source_changes,
                 "active": self._controller.override_active,
@@ -102,6 +122,20 @@ class ClaimDiagnosticSensor(SensorEntity):
             "reconciliation_suppressed": self._controller.override_active,
             "in_sync": self._controller.in_sync,
         }
+
+    def _value_snapshot(
+        self, value: int, *, name: str | None = None
+    ) -> dict[str, str | int]:
+        """Describe one claim-space value without mixing in Source state."""
+
+        snapshot: dict[str, str | int] = {
+            "state": STATE_ON if value > 0 else STATE_OFF
+        }
+        if name is not None:
+            snapshot["name"] = name
+        if self._controller.profile.kind is not ClaimKind.BINARY:
+            snapshot[self._controller.profile.kind.value] = value
+        return snapshot
 
     async def async_added_to_hass(self) -> None:
         """Subscribe to controller updates."""

@@ -14,7 +14,7 @@ CONF_OVERRIDE_DURATION_MINUTES: Final = "override_duration_minutes"
 CONF_REQUESTER_ID: Final = "id"
 CONF_REQUESTER_NAME: Final = "name"
 
-SUPPORTED_DOMAINS: Final = ("fan", "light", "switch")
+SUPPORTED_DOMAINS: Final = ("cover", "fan", "light", "switch")
 DEFAULT_AGGREGATION_POLICY: Final = "any"
 DEFAULT_DIAGNOSTIC_SENSOR_ENABLED: Final = False
 DEFAULT_RESPECT_SOURCE_CHANGES: Final = True
@@ -24,6 +24,13 @@ DEFAULT_OVERRIDE_DURATION_MINUTES: Final = 15
 # service-call Context can correlate the resulting state change. The desired
 # state is only a secondary fallback for integrations which drop Context.
 PENDING_COMMAND_TTL_SECONDS: Final = 30
+
+# Covers can report many intermediate positions after one command. Context is
+# preferred, while this short guard protects integrations that drop Context
+# before an explicit opening/closing state is visible. The longer lifetime
+# prevents duplicate commands during normal travel.
+COVER_MOVEMENT_GUARD_SECONDS: Final = 10
+COVER_MOVEMENT_TTL_SECONDS: Final = 300
 
 CLAIM_UNIQUE_ID_SEPARATOR: Final = ":claim:"
 DIAGNOSTIC_UNIQUE_ID_SUFFIX: Final = ":diagnostic"

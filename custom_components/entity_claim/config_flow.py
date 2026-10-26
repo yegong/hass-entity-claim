@@ -27,6 +27,7 @@ from homeassistant.helpers.selector import (
     TextSelectorConfig,
 )
 
+from .capability import aggregation_selector_key, profile_for_source
 from .const import (
     CONF_AGGREGATION_POLICY,
     CONF_DIAGNOSTIC_SENSOR_ENABLED,
@@ -41,7 +42,7 @@ from .const import (
     DOMAIN,
     SUPPORTED_DOMAINS,
 )
-from .model import AggregationPolicy, Requester
+from .model import AggregationPolicy, ClaimProfile, Requester
 from .registry import find_entity_id_conflict
 from .schema import (
     RequesterParseError,
@@ -55,21 +56,27 @@ from .schema import (
 )
 
 
-def _configuration_schema(
-    defaults: dict[str, Any], *, include_target: bool
-) -> probatio.Schema:
-    """Build the user or reconfigure form schema."""
+def _target_schema(default: str | None = None) -> probatio.Schema:
+    """Build the first form so later copy can match the Source capability."""
 
-    schema: dict[Any, Any] = {}
-    if include_target:
-        schema[
+    return probatio.Schema(
+        {
             probatio.Required(
                 CONF_TARGET_ENTITY_ID,
-                default=defaults.get(CONF_TARGET_ENTITY_ID),
+                default=default,
+            ): EntitySelector(
+                EntitySelectorConfig(domain=list(SUPPORTED_DOMAINS))
             )
-        ] = EntitySelector(
-            EntitySelectorConfig(domain=list(SUPPORTED_DOMAINS))
-        )
+        }
+    )
+
+
+def _configuration_schema(
+    defaults: dict[str, Any], profile: ClaimProfile
+) -> probatio.Schema:
+    """Build capability-aware Claim settings."""
+
+    schema: dict[Any, Any] = {}
     schema[
         probatio.Required(
             CONF_REQUESTERS,
@@ -86,7 +93,7 @@ def _configuration_schema(
     ] = SelectSelector(
         SelectSelectorConfig(
             options=[policy.value for policy in AggregationPolicy],
-            translation_key="aggregation_policy",
+            translation_key=aggregation_selector_key(profile),
         )
     )
     schema[
@@ -124,6 +131,18 @@ def _configuration_schema(
         )
     )
     return probatio.Schema(schema)
+
+
+def _profile_for_target(
+    hass: HomeAssistant, target_entity_id: str
+) -> ClaimProfile:
+    """Inspect the current Source capabilities for UI and runtime parity."""
+
+    target_domain, _ = split_entity_id(target_entity_id)
+    state = hass.states.get(target_entity_id)
+    return profile_for_source(
+        target_domain, state.attributes if state is not None else {}
+    )
 
 
 def _target_title(hass: HomeAssistant, target_entity_id: str) -> str:
@@ -213,6 +232,8 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
     VERSION = 1
 
+    _target_entity_id: str | None = None
+
     @staticmethod
     @callback
     def async_get_options_flow(
@@ -225,11 +246,9 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Create a config entry for one source entity."""
+        """Select the Source before showing capability-specific settings."""
 
         errors: dict[str, str] = {}
-        detail = ""
-        defaults = user_input or {}
         if user_input is not None:
             registry = er.async_get(self.hass)
             target_entity_id = er.async_resolve_entity_id(
@@ -238,35 +257,80 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if target_entity_id is None:
                 errors[CONF_TARGET_ENTITY_ID] = "target_not_found"
             else:
-                user_input[CONF_TARGET_ENTITY_ID] = target_entity_id
-                requesters, validation_error, detail = _validate_input(
-                    self.hass,
-                    target_entity_id,
-                    user_input,
-                )
-                if validation_error:
-                    errors[
-                        CONF_REQUESTERS
-                        if validation_error == "invalid_requesters"
-                        else "base"
-                    ] = validation_error
-                elif not requesters:
-                    errors[CONF_REQUESTERS] = "requester_required"
+                try:
+                    target_domain, _ = split_entity_id(target_entity_id)
+                except ValueError:
+                    errors[CONF_TARGET_ENTITY_ID] = "target_not_found"
                 else:
-                    assert requesters is not None
-                    await self.async_set_unique_id(target_entity_id)
-                    self._abort_if_unique_id_configured()
-                    data = _entry_data(target_entity_id, user_input, requesters)
-                    return self.async_create_entry(
-                        title=_target_title(self.hass, target_entity_id),
-                        data=data,
-                    )
+                    source_registry_entry = registry.async_get(target_entity_id)
+                    if target_domain not in SUPPORTED_DOMAINS:
+                        errors["base"] = "unsupported_domain"
+                    elif self.hass.states.get(target_entity_id) is None:
+                        errors[CONF_TARGET_ENTITY_ID] = "target_not_found"
+                    elif (
+                        source_registry_entry is not None
+                        and source_registry_entry.platform == DOMAIN
+                    ):
+                        errors["base"] = "claim_cannot_be_target"
+                    else:
+                        await self.async_set_unique_id(target_entity_id)
+                        self._abort_if_unique_id_configured()
+                        self._target_entity_id = target_entity_id
+                        return await self.async_step_claims()
 
         return self.async_show_form(
             step_id="user",
-            data_schema=_configuration_schema(defaults, include_target=True),
+            data_schema=_target_schema(
+                user_input.get(CONF_TARGET_ENTITY_ID)
+                if user_input is not None
+                else None
+            ),
             errors=errors,
-            description_placeholders={"error_detail": detail},
+        )
+
+    async def async_step_claims(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Configure requesters using Source-specific aggregation wording."""
+
+        if self._target_entity_id is None:
+            return await self.async_step_user()
+
+        target_entity_id = self._target_entity_id
+        profile = _profile_for_target(self.hass, target_entity_id)
+        errors: dict[str, str] = {}
+        detail = ""
+        defaults = user_input or {}
+        if user_input is not None:
+            requesters, validation_error, detail = _validate_input(
+                self.hass,
+                target_entity_id,
+                user_input,
+            )
+            if validation_error:
+                errors[
+                    CONF_REQUESTERS
+                    if validation_error == "invalid_requesters"
+                    else "base"
+                ] = validation_error
+            elif not requesters:
+                errors[CONF_REQUESTERS] = "requester_required"
+            else:
+                assert requesters is not None
+                data = _entry_data(target_entity_id, user_input, requesters)
+                return self.async_create_entry(
+                    title=_target_title(self.hass, target_entity_id),
+                    data=data,
+                )
+
+        return self.async_show_form(
+            step_id="claims",
+            data_schema=_configuration_schema(defaults, profile),
+            errors=errors,
+            description_placeholders={
+                "target_entity_id": target_entity_id,
+                "error_detail": detail,
+            },
         )
 
     async def async_step_reconfigure(
@@ -276,6 +340,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         entry = self._get_reconfigure_entry()
         target_entity_id = entry.data[CONF_TARGET_ENTITY_ID]
+        profile = _profile_for_target(self.hass, target_entity_id)
         current_requesters = requesters_from_config(entry.data[CONF_REQUESTERS])
         defaults = user_input or {
             CONF_REQUESTERS: requesters_to_names(current_requesters),
@@ -322,7 +387,7 @@ class EntityClaimConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         return self.async_show_form(
             step_id="reconfigure",
-            data_schema=_configuration_schema(defaults, include_target=False),
+            data_schema=_configuration_schema(defaults, profile),
             errors=errors,
             description_placeholders={
                 "target_entity_id": target_entity_id,
@@ -367,6 +432,7 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
 
         entry = self.config_entry
         target_entity_id = entry.data[CONF_TARGET_ENTITY_ID]
+        profile = _profile_for_target(self.hass, target_entity_id)
         current_requesters = requesters_from_config(entry.data[CONF_REQUESTERS])
         defaults = user_input or {
             CONF_REQUESTERS: requesters_to_names(current_requesters),
@@ -409,7 +475,7 @@ class EntityClaimOptionsFlow(OptionsFlowWithReload):
 
         return self.async_show_form(
             step_id="init",
-            data_schema=_configuration_schema(defaults, include_target=False),
+            data_schema=_configuration_schema(defaults, profile),
             errors=errors,
             description_placeholders={
                 "target_entity_id": target_entity_id,

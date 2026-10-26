@@ -3,10 +3,19 @@
   "config": {
     "step": {
       "user": {
-        "title": "配置 Entity Claim",
-        "description": "为每个 requester 创建一个 Claim Entity。\n\n{error_detail}",
+        "title": "选择 Source Entity",
+        "description": "选择由 Entity Claim 控制实际状态的现有 Entity。",
         "data": {
-          "target_entity_id": "Source Entity",
+          "target_entity_id": "Source Entity"
+        },
+        "data_description": {
+          "target_entity_id": "支持 cover、fan、light 和 switch domain。"
+        }
+      },
+      "claims": {
+        "title": "配置 Entity Claim",
+        "description": "为 `{target_entity_id}` 的每个 requester 创建一个 Claim Entity。\n\n{error_detail}",
+        "data": {
           "requesters": "Requester 名称",
           "aggregation_policy": "聚合策略",
           "diagnostic_sensor_enabled": "创建诊断传感器",
@@ -14,10 +23,9 @@
           "override_duration_minutes": "Manual Override 持续时间"
         },
         "data_description": {
-          "target_entity_id": "其实际状态将由聚合结果控制的原始 Entity。",
-          "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
+          "aggregation_policy": "有序需求的聚合方式。可选项文案会匹配 Source 的能力。",
           "diagnostic_sensor_enabled": "为此 Source 创建一个只读诊断传感器。",
-          "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。",
+          "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。Cover 朝目标位置的正常移动不会被视为 Override。",
           "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。"
         }
       },
@@ -32,7 +40,7 @@
           "override_duration_minutes": "Manual Override 持续时间"
         },
         "data_description": {
-          "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
+          "aggregation_policy": "有序需求的聚合方式。可选项文案会匹配 Source 的能力。",
           "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。",
           "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。",
           "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。"
@@ -48,7 +56,7 @@
     },
     "error": {
       "target_not_found": "当前找不到所选 Source Entity。",
-      "unsupported_domain": "当前仅支持 fan、light 和 switch Source Entity。",
+      "unsupported_domain": "当前仅支持 cover、fan、light 和 switch Source Entity。",
       "claim_cannot_be_target": "不能将 Claim Entity 作为 Source Entity 管理。",
       "requester_required": "请至少添加一个 requester。",
       "invalid_requesters": "一个或多个 requester 名称无法使用，请查看上方详情。",
@@ -73,7 +81,7 @@
           "override_duration_minutes": "Manual Override 持续时间"
         },
         "data_description": {
-          "aggregation_policy": "当前 Boolean Claims 的聚合方式。",
+          "aggregation_policy": "有序需求的聚合方式。可选项文案会匹配 Source 的能力。",
           "diagnostic_sensor_enabled": "添加或删除只读诊断传感器。",
           "respect_source_changes": "外部变更与聚合后的期望状态冲突时，暂时停止 Reconcile。",
           "override_duration_minutes": "从最近一次冲突外部变更开始，抑制 Reconcile 的分钟数。"
@@ -89,7 +97,7 @@
     },
     "error": {
       "target_not_found": "当前找不到 Source Entity。",
-      "unsupported_domain": "当前仅支持 fan、light 和 switch Source Entity。",
+      "unsupported_domain": "当前仅支持 cover、fan、light 和 switch Source Entity。",
       "claim_cannot_be_target": "不能将 Claim Entity 作为 Source Entity 管理。",
       "invalid_requesters": "一个或多个 requester 名称无法使用，请查看上方详情。",
       "entity_id_conflict": "生成的 Entity ID 已被占用。冲突 ID 显示在上方；请先删除或重命名冲突实体，然后重试。"
@@ -99,14 +107,37 @@
     }
   },
   "selector": {
-    "aggregation_policy": {
+    "aggregation_policy_binary": {
       "options": {
-        "any": "ANY — 至少一个 Claim 为 ON",
-        "all": "ALL — 所有已配置 Claim 均为 ON"
+        "any": "ANY — 任意 requester 要求时开启",
+        "all": "ALL — 仅当所有 requester 都要求时开启"
+      }
+    },
+    "aggregation_policy_brightness": {
+      "options": {
+        "any": "ANY — 使用最高的照明亮度需求",
+        "all": "ALL — 使用各方共同接受的最低亮度"
+      }
+    },
+    "aggregation_policy_percentage": {
+      "options": {
+        "any": "ANY — 使用最高的风速需求",
+        "all": "ALL — 使用各方共同接受的最低风速"
+      }
+    },
+    "aggregation_policy_position": {
+      "options": {
+        "any": "ANY — 使用最高的位置需求",
+        "all": "ALL — 使用各方共同接受的最低位置"
       }
     }
   },
   "entity": {
+    "cover": {
+      "claim": {
+        "name": "{source_name} 由 {requester_name} 要求"
+      }
+    },
     "fan": {
       "claim": {
         "name": "{source_name} 由 {requester_name} 要求"

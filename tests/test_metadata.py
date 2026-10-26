@@ -3,6 +3,7 @@
 import ast
 import json
 from pathlib import Path
+import re
 import unittest
 
 
@@ -23,6 +24,21 @@ class MetadataTests(unittest.TestCase):
                 with path.open(encoding="utf-8") as file:
                     self.assertIsInstance(json.load(file), dict)
 
+    def test_base_and_english_strings_match(self) -> None:
+        with (INTEGRATION_DIR / "strings.json").open(encoding="utf-8") as file:
+            base = json.load(file)
+        with (INTEGRATION_DIR / "translations" / "en.json").open(
+            encoding="utf-8"
+        ) as file:
+            english = json.load(file)
+        self.assertEqual(base, english)
+        self.assertIsNone(
+            re.search(
+                r"[\u3400-\u4dbf\u4e00-\u9fff]",
+                json.dumps(english, ensure_ascii=False),
+            )
+        )
+
     def test_manifest_declares_config_flow_and_no_dependencies(self) -> None:
         with (INTEGRATION_DIR / "manifest.json").open(encoding="utf-8") as file:
             manifest = json.load(file)
@@ -34,14 +50,21 @@ class MetadataTests(unittest.TestCase):
     def test_every_platform_has_an_entity_name_translation(self) -> None:
         with (INTEGRATION_DIR / "strings.json").open(encoding="utf-8") as file:
             strings = json.load(file)
-        for platform in ("fan", "light", "switch"):
+        for platform in ("cover", "fan", "light", "switch"):
             self.assertIn("name", strings["entity"][platform]["claim"])
         self.assertIn("name", strings["entity"]["sensor"]["diagnostics"])
 
-    def test_fan_claim_declares_boolean_actions(self) -> None:
+    def test_fan_claim_declares_percentage_capability(self) -> None:
         source = (INTEGRATION_DIR / "fan.py").read_text(encoding="utf-8")
         self.assertIn("FanEntityFeature.TURN_ON", source)
         self.assertIn("FanEntityFeature.TURN_OFF", source)
+        self.assertIn("FanEntityFeature.SET_SPEED", source)
+
+    def test_cover_claim_excludes_tilt_and_stop(self) -> None:
+        source = (INTEGRATION_DIR / "cover.py").read_text(encoding="utf-8")
+        self.assertIn("CoverEntityFeature.SET_POSITION", source)
+        self.assertNotIn("CoverEntityFeature.SET_TILT_POSITION", source)
+        self.assertNotIn("CoverEntityFeature.STOP", source)
 
     def test_helpers_ui_has_an_options_flow(self) -> None:
         source = (INTEGRATION_DIR / "config_flow.py").read_text(
@@ -61,13 +84,32 @@ class MetadataTests(unittest.TestCase):
             with (INTEGRATION_DIR / filename).open(encoding="utf-8") as file:
                 strings = json.load(file)
             for flow, step in (
-                ("config", "user"),
+                ("config", "claims"),
                 ("config", "reconfigure"),
                 ("options", "init"),
             ):
                 data = strings[flow]["step"][step]["data"]
                 self.assertIn("respect_source_changes", data)
                 self.assertIn("override_duration_minutes", data)
+
+    def test_each_capability_has_aggregation_copy(self) -> None:
+        for filename in (
+            "strings.json",
+            "translations/en.json",
+            "translations/zh-Hans.json",
+        ):
+            with (INTEGRATION_DIR / filename).open(encoding="utf-8") as file:
+                selectors = json.load(file)["selector"]
+            for capability in (
+                "binary",
+                "brightness",
+                "percentage",
+                "position",
+            ):
+                options = selectors[f"aggregation_policy_{capability}"][
+                    "options"
+                ]
+                self.assertEqual(set(options), {"any", "all"})
 
     def test_generated_entities_inherit_source_location(self) -> None:
         setup_source = (INTEGRATION_DIR / "__init__.py").read_text(
