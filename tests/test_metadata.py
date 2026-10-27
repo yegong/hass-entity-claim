@@ -105,6 +105,17 @@ class MetadataTests(unittest.TestCase):
         assert isinstance(final_statement.value.func, ast.Attribute)
         self.assertEqual(final_statement.value.func.attr, "_notify")
 
+    def test_controller_updates_schedule_thread_safe_state_writes(self) -> None:
+        """Entity subscribers must tolerate non-event-loop notifications."""
+
+        for filename in ("entity.py", "sensor.py"):
+            with self.subTest(filename=filename):
+                source = (INTEGRATION_DIR / filename).read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn("self.schedule_update_ha_state()", source)
+                self.assertNotIn("self.async_write_ha_state()", source)
+
     def test_config_entry_migrates_legacy_override_toggle(self) -> None:
         setup = (INTEGRATION_DIR / "__init__.py").read_text(encoding="utf-8")
         flow = (INTEGRATION_DIR / "config_flow.py").read_text(

@@ -141,4 +141,6 @@ class ClaimDiagnosticSensor(SensorEntity):
     def _handle_controller_update(self) -> None:
         """Publish the latest diagnostic snapshot."""
 
-        self.async_write_ha_state()
+        # Keep Controller subscribers safe even when a notification originates
+        # outside Home Assistant's event-loop thread.
+        self.schedule_update_ha_state()

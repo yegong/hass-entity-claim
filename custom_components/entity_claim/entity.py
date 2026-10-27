@@ -126,4 +126,7 @@ class ClaimEntityMixin:
     def _handle_controller_update(self) -> None:
         """Publish a changed claim or aggregation attribute."""
 
-        self.async_write_ha_state()  # type: ignore[attr-defined]
+        # Controller notifications may originate outside HA's event-loop
+        # thread. The synchronous scheduler is the thread-safe counterpart of
+        # async_write_ha_state and marshals the write onto the event loop.
+        self.schedule_update_ha_state()  # type: ignore[attr-defined]
