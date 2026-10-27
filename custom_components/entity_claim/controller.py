@@ -625,6 +625,11 @@ class EntityClaimController:
                 self.async_reconcile(),
                 f"Reconcile claims for {self.target_entity_id}",
             )
+        # Pending command classification above may have cleared the command
+        # after the event's initial notification. Publish once more so the
+        # diagnostic lifecycle leaves ``applying`` as soon as the Source has
+        # reached its target.
+        self._notify()
 
     def _is_observable_source_change(
         self, old_state: State | None, new_state: State | None

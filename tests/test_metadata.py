@@ -78,6 +78,33 @@ class MetadataTests(unittest.TestCase):
         self.assertNotIn('return "in_sync"', source)
         self.assertNotIn('return "manual_override"', source)
 
+    def test_target_completion_publishes_post_classification_state(self) -> None:
+        """A cleared pending command must be visible to diagnostics."""
+
+        source = (INTEGRATION_DIR / "controller.py").read_text(
+            encoding="utf-8"
+        )
+        controller = next(
+            node
+            for node in ast.parse(source).body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "EntityClaimController"
+        )
+        handler = next(
+            node
+            for node in controller.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_handle_target_change"
+        )
+        final_statement = handler.body[-1]
+        self.assertIsInstance(final_statement, ast.Expr)
+        assert isinstance(final_statement, ast.Expr)
+        self.assertIsInstance(final_statement.value, ast.Call)
+        assert isinstance(final_statement.value, ast.Call)
+        self.assertIsInstance(final_statement.value.func, ast.Attribute)
+        assert isinstance(final_statement.value.func, ast.Attribute)
+        self.assertEqual(final_statement.value.func.attr, "_notify")
+
     def test_config_entry_migrates_legacy_override_toggle(self) -> None:
         setup = (INTEGRATION_DIR / "__init__.py").read_text(encoding="utf-8")
         flow = (INTEGRATION_DIR / "config_flow.py").read_text(
