@@ -57,9 +57,11 @@ from .model import (
     ControlState,
     Requester,
     ScopedSession,
+    StalledCoverAction,
     is_conflicting_external_change,
     is_expected_position_progress,
     matches_pending_command,
+    stalled_cover_action,
     values_match,
 )
 
@@ -389,7 +391,9 @@ class EntityClaimController:
         self._notify()
         await self.async_reconcile()
 
-    async def async_reconcile(self) -> None:
+    async def async_reconcile(
+        self, *, retry_stalled_cover: bool = False
+    ) -> None:
         """Apply the latest aggregated desired value to the Source."""
 
         if not self._ready or self.override_active:
@@ -398,13 +402,19 @@ class EntityClaimController:
             if self.override_active:
                 return
             if self._control_policy is ControlPolicy.SCOPED:
-                await self._async_reconcile_scoped()
+                await self._async_reconcile_scoped(
+                    retry_stalled_cover=retry_stalled_cover
+                )
                 return
             await self._async_apply_desired(
-                self.desired, PendingPurpose.APPLY
+                self.desired,
+                PendingPurpose.APPLY,
+                retry_stalled_cover=retry_stalled_cover,
             )
 
-    async def _async_reconcile_scoped(self) -> None:
+    async def _async_reconcile_scoped(
+        self, *, retry_stalled_cover: bool = False
+    ) -> None:
         """Apply or restore one uninterrupted scoped control session."""
 
         participants = self._scoped.participants
@@ -415,6 +425,7 @@ class EntityClaimController:
             await self._async_apply_desired(
                 self._scoped.baseline,
                 PendingPurpose.RESTORE,
+                retry_stalled_cover=retry_stalled_cover,
             )
             return
         if not participants:
@@ -446,10 +457,15 @@ class EntityClaimController:
                 if self._scoped.owned
                 else PendingPurpose.ACQUIRE
             ),
+            retry_stalled_cover=retry_stalled_cover,
         )
 
     async def _async_apply_desired(
-        self, desired: int, purpose: PendingPurpose
+        self,
+        desired: int,
+        purpose: PendingPurpose,
+        *,
+        retry_stalled_cover: bool = False,
     ) -> None:
         """Issue the smallest command needed for one authorized target."""
 
@@ -462,23 +478,44 @@ class EntityClaimController:
         matches = values_match(
             desired, actual, tolerance=self.profile.tolerance
         )
+        stalled_action = (
+            stalled_cover_action(
+                desired,
+                actual,
+                moving=moving,
+                can_stop=self._cover_can_stop(),
+                tolerance=self.profile.tolerance,
+            )
+            if retry_stalled_cover and self.target_domain == "cover"
+            else None
+        )
         if pending is not None and pending.desired == desired:
             return
 
         superseded_pending = (
             pending is not None and pending.desired != desired
         )
-        if matches and not superseded_pending:
+        if (
+            matches
+            and not superseded_pending
+            and stalled_action is None
+        ):
             if purpose is PendingPurpose.RESTORE:
                 self._clear_scoped_session()
             return
-        if moving and pending is None:
+        if moving and pending is None and stalled_action is None:
             # Never fight an uncorrelated Cover movement. A scoped candidate
             # captures its baseline only after that movement becomes stable.
             return
 
         stop_cover = (
-            matches and moving and superseded_pending and self._cover_can_stop()
+            stalled_action is StalledCoverAction.STOP
+            or (
+                matches
+                and moving
+                and superseded_pending
+                and self._cover_can_stop()
+            )
         )
         self._clear_pending_command()
         service, data = self._source_command(desired, stop_cover=stop_cover)
@@ -833,7 +870,10 @@ class EntityClaimController:
             return None
         if datetime.now(UTC) <= pending.expires_at:
             return pending
-        self._clear_pending_command()
+        # Keep the expired record until its timer callback consumes it. If a
+        # state event or another reconcile reads it in the narrow interval
+        # before that callback runs, clearing it here would make the callback
+        # a no-op and permanently lose Cover timeout recovery.
         return None
 
     @callback
@@ -920,7 +960,9 @@ class EntityClaimController:
         self._notify()
         if self._ready and not self.override_active:
             self._task_creator(
-                self.async_reconcile(),
+                self.async_reconcile(
+                    retry_stalled_cover=self.target_domain == "cover"
+                ),
                 f"Reconcile claims after command timeout for {self.target_entity_id}",
             )
 

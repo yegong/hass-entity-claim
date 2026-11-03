@@ -105,6 +105,54 @@ class MetadataTests(unittest.TestCase):
         assert isinstance(final_statement.value.func, ast.Attribute)
         self.assertEqual(final_statement.value.func.attr, "_notify")
 
+    def test_cover_timeout_authorizes_one_stalled_reconcile(self) -> None:
+        """An expired Cover command must not leave applying stuck forever."""
+
+        source = (INTEGRATION_DIR / "controller.py").read_text(
+            encoding="utf-8"
+        )
+        controller = next(
+            node
+            for node in ast.parse(source).body
+            if isinstance(node, ast.ClassDef)
+            and node.name == "EntityClaimController"
+        )
+        handler = next(
+            node
+            for node in controller.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_handle_pending_expired"
+        )
+        reconcile_calls = [
+            node
+            for node in ast.walk(handler)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "async_reconcile"
+        ]
+        self.assertEqual(len(reconcile_calls), 1)
+        self.assertIn(
+            "retry_stalled_cover",
+            {keyword.arg for keyword in reconcile_calls[0].keywords},
+        )
+
+        active_pending = next(
+            node
+            for node in controller.body
+            if isinstance(node, ast.FunctionDef)
+            and node.name == "_active_pending_command"
+        )
+        self.assertNotIn(
+            "_clear_pending_command",
+            {
+                node.func.attr
+                for node in ast.walk(active_pending)
+                if isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+            },
+            "Only the timeout callback may consume an expired pending command",
+        )
+
     def test_controller_updates_schedule_thread_safe_state_writes(self) -> None:
         """Entity subscribers must tolerate non-event-loop notifications."""
 

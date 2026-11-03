@@ -12,12 +12,14 @@ from custom_components.entity_claim.model import (
     ReconcileAction,
     Requester,
     ScopedSession,
+    StalledCoverAction,
     aggregate_claims,
     aggregation_identity,
     is_conflicting_external_change,
     is_expected_position_progress,
     matches_pending_command,
     reconcile_action,
+    stalled_cover_action,
     values_match,
 )
 
@@ -216,6 +218,33 @@ class ReconcileActionTests(unittest.TestCase):
     def test_unknown_or_unavailable_actual_is_deferred(self) -> None:
         self.assertIsNone(reconcile_action(True, None))
         self.assertIsNone(reconcile_action(False, None))
+
+
+class StalledCoverActionTests(unittest.TestCase):
+    """Verify Cover timeout recovery uses the latest observed state."""
+
+    def test_stable_cover_needs_no_timeout_recovery(self) -> None:
+        self.assertIsNone(
+            stalled_cover_action(100, 100, moving=False, can_stop=True)
+        )
+
+    def test_cover_at_desired_position_is_stopped(self) -> None:
+        self.assertEqual(
+            stalled_cover_action(100, 100, moving=True, can_stop=True),
+            StalledCoverAction.STOP,
+        )
+
+    def test_cover_short_of_latest_desired_is_reapplied(self) -> None:
+        self.assertEqual(
+            stalled_cover_action(100, 40, moving=True, can_stop=True),
+            StalledCoverAction.REAPPLY,
+        )
+
+    def test_cover_without_stop_support_reapplies_desired(self) -> None:
+        self.assertEqual(
+            stalled_cover_action(0, 0, moving=True, can_stop=False),
+            StalledCoverAction.REAPPLY,
+        )
 
 
 class ExternalChangeTests(unittest.TestCase):

@@ -72,6 +72,13 @@ class ReconcileAction(StrEnum):
     TURN_OFF = "turn_off"
 
 
+class StalledCoverAction(StrEnum):
+    """Recovery action after one Cover command has timed out."""
+
+    STOP = "stop"
+    REAPPLY = "reapply"
+
+
 @dataclass(frozen=True, slots=True)
 class Requester:
     """Stable requester identity and its user-visible name."""
@@ -170,6 +177,28 @@ def reconcile_action(
     if actual is None or desired == actual:
         return None
     return ReconcileAction.TURN_ON if desired else ReconcileAction.TURN_OFF
+
+
+def stalled_cover_action(
+    desired: int,
+    actual: int | None,
+    *,
+    moving: bool,
+    can_stop: bool,
+    tolerance: float = 0,
+) -> StalledCoverAction | None:
+    """Return the recovery needed after a Cover command times out.
+
+    A Cover that still reports motion cannot be left permanently outside the
+    normal reconcile path. If it has reached the latest desired position,
+    stop it when possible; otherwise reapply that latest desired position.
+    """
+
+    if not moving:
+        return None
+    if values_match(desired, actual, tolerance=tolerance) and can_stop:
+        return StalledCoverAction.STOP
+    return StalledCoverAction.REAPPLY
 
 
 def is_conflicting_external_change(
