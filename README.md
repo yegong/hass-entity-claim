@@ -132,6 +132,14 @@ When the aggregate desired value differs from the Source Entity's actual value, 
 
 No action is called when both states already match. If the source is `unknown` or `unavailable`, reconciliation is deferred until its state becomes explicit again.
 
+Commands are retried while the selected control policy still grants authority
+and desired still differs from actual. Light, Fan, and Switch retries back off
+from 5 seconds to a maximum of 60 seconds. Cover service failures use a slower
+30-to-300-second backoff, while an accepted Cover movement keeps its longer
+movement window before recovery. Entering Manual Override, relinquishing a
+scoped session, reaching the target, or becoming unavailable cancels or pauses
+the retry loop.
+
 ### Control authority
 
 Each Config Entry selects one control policy:
@@ -181,7 +189,7 @@ It does not currently aggregate or forward features such as:
 - Cover tilt, speed, or stop;
 - Valve claims;
 - requester priority;
-- retry, backoff, or complex conflict arbitration.
+- complex conflict arbitration.
 
 Capabilities are exposed only when both the Source supports them and their Claim aggregation semantics are defined. Cover tilt and Valve claims are intentionally excluded because their demand semantics are not sufficiently clear for this model.
 

@@ -28,6 +28,12 @@ DEFAULT_OVERRIDE_DURATION_MINUTES: Final = 15
 # state is only a secondary fallback for integrations which drop Context.
 PENDING_COMMAND_TTL_SECONDS: Final = 30
 
+# Reconciliation retries continue while this integration still has authority.
+# Fast, non-mechanical entities retry promptly; Covers use a slower schedule
+# because repeating a physical movement command too aggressively is unsafe.
+COMMAND_RETRY_DELAYS_SECONDS: Final = (5, 15, 30, 60)
+COVER_COMMAND_RETRY_DELAYS_SECONDS: Final = (30, 60, 120, 300)
+
 # Covers can report many intermediate positions after one command. Context is
 # preferred, while this short guard protects integrations that drop Context
 # before an explicit opening/closing state is visible. The longer lifetime

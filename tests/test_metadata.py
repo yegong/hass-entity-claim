@@ -153,6 +153,38 @@ class MetadataTests(unittest.TestCase):
             "Only the timeout callback may consume an expired pending command",
         )
 
+    def test_reconciliation_uses_domain_aware_retry_backoff(self) -> None:
+        """Fast entities and physical Covers must not share retry timing."""
+
+        constants = (INTEGRATION_DIR / "const.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn(
+            "COMMAND_RETRY_DELAYS_SECONDS: Final = (5, 15, 30, 60)",
+            constants,
+        )
+        self.assertIn(
+            "COVER_COMMAND_RETRY_DELAYS_SECONDS: Final = (30, 60, 120, 300)",
+            constants,
+        )
+
+        controller = (INTEGRATION_DIR / "controller.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("def _schedule_retry(", controller)
+        self.assertIn("retry_failed_command=True", controller)
+        self.assertIn("retry_generation=generation", controller)
+        self.assertIn("command_completed and self.target_domain", controller)
+
+    def test_light_brightness_accepts_device_quantization(self) -> None:
+        """Minor brightness rounding must not keep a Light applying forever."""
+
+        source = (INTEGRATION_DIR / "capability.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("LIGHT_BRIGHTNESS_TOLERANCE = 2", source)
+        self.assertIn("tolerance=LIGHT_BRIGHTNESS_TOLERANCE", source)
+
     def test_controller_updates_schedule_thread_safe_state_writes(self) -> None:
         """Entity subscribers must tolerate non-event-loop notifications."""
 

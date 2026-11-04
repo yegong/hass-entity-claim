@@ -42,7 +42,9 @@ from homeassistant.helpers.event import async_call_later, async_track_state_chan
 from homeassistant.helpers.storage import Store
 
 from .const import (
+    COMMAND_RETRY_DELAYS_SECONDS,
     CONTROL_STORAGE_VERSION,
+    COVER_COMMAND_RETRY_DELAYS_SECONDS,
     COVER_MOVEMENT_GUARD_SECONDS,
     COVER_MOVEMENT_TTL_SECONDS,
     DOMAIN,
@@ -139,6 +141,10 @@ class EntityClaimController:
         self._cancel_override_timer: CancelCallback | None = None
         self._pending_command: PendingCommand | None = None
         self._cancel_pending_timer: CancelCallback | None = None
+        self._cancel_retry_timer: CancelCallback | None = None
+        self._retry_attempt = 0
+        self._retry_desired: int | None = None
+        self._retry_generation = 0
         self._recent_command_contexts: dict[str, datetime] = {}
         self._scoped = ScopedSession()
         self._store = Store[dict[str, Any]](
@@ -323,6 +329,7 @@ class EntityClaimController:
         if self._cancel_override_timer is not None:
             self._cancel_override_timer()
             self._cancel_override_timer = None
+        self._reset_retry()
         self._clear_pending_command()
         self._recent_command_contexts.clear()
 
@@ -392,7 +399,11 @@ class EntityClaimController:
         await self.async_reconcile()
 
     async def async_reconcile(
-        self, *, retry_stalled_cover: bool = False
+        self,
+        *,
+        retry_failed_command: bool = False,
+        retry_generation: int | None = None,
+        retry_stalled_cover: bool = False,
     ) -> None:
         """Apply the latest aggregated desired value to the Source."""
 
@@ -401,19 +412,29 @@ class EntityClaimController:
         async with self._reconcile_lock:
             if self.override_active:
                 return
+            if (
+                retry_failed_command
+                and retry_generation != self._retry_generation
+            ):
+                return
             if self._control_policy is ControlPolicy.SCOPED:
                 await self._async_reconcile_scoped(
-                    retry_stalled_cover=retry_stalled_cover
+                    retry_failed_command=retry_failed_command,
+                    retry_stalled_cover=retry_stalled_cover,
                 )
                 return
             await self._async_apply_desired(
                 self.desired,
                 PendingPurpose.APPLY,
+                retry_failed_command=retry_failed_command,
                 retry_stalled_cover=retry_stalled_cover,
             )
 
     async def _async_reconcile_scoped(
-        self, *, retry_stalled_cover: bool = False
+        self,
+        *,
+        retry_failed_command: bool = False,
+        retry_stalled_cover: bool = False,
     ) -> None:
         """Apply or restore one uninterrupted scoped control session."""
 
@@ -425,6 +446,7 @@ class EntityClaimController:
             await self._async_apply_desired(
                 self._scoped.baseline,
                 PendingPurpose.RESTORE,
+                retry_failed_command=retry_failed_command,
                 retry_stalled_cover=retry_stalled_cover,
             )
             return
@@ -457,6 +479,7 @@ class EntityClaimController:
                 if self._scoped.owned
                 else PendingPurpose.ACQUIRE
             ),
+            retry_failed_command=retry_failed_command,
             retry_stalled_cover=retry_stalled_cover,
         )
 
@@ -465,6 +488,7 @@ class EntityClaimController:
         desired: int,
         purpose: PendingPurpose,
         *,
+        retry_failed_command: bool = False,
         retry_stalled_cover: bool = False,
     ) -> None:
         """Issue the smallest command needed for one authorized target."""
@@ -489,7 +513,11 @@ class EntityClaimController:
             if retry_stalled_cover and self.target_domain == "cover"
             else None
         )
-        if pending is not None and pending.desired == desired:
+        if (
+            pending is not None
+            and pending.desired == desired
+            and not retry_failed_command
+        ):
             return
 
         superseded_pending = (
@@ -502,6 +530,9 @@ class EntityClaimController:
         ):
             if purpose is PendingPurpose.RESTORE:
                 self._clear_scoped_session()
+            else:
+                self._reset_retry()
+                self._clear_pending_command()
             return
         if moving and pending is None and stalled_action is None:
             # Never fight an uncorrelated Cover movement. A scoped candidate
@@ -523,6 +554,8 @@ class EntityClaimController:
         self._remember_pending_command(
             desired, actual, context.id, purpose=purpose
         )
+        command_completed = False
+        command_failed = False
         try:
             await self.hass.services.async_call(
                 self.target_domain,
@@ -531,16 +564,20 @@ class EntityClaimController:
                 blocking=True,
                 context=context,
             )
+            command_completed = True
         except HomeAssistantError:
+            command_failed = True
             self._clear_pending_command()
-            if purpose is PendingPurpose.ACQUIRE:
-                self._clear_scoped_session()
             _LOGGER.exception(
                 "Unable to reconcile %s to %s",
                 self.target_entity_id,
                 desired,
             )
         finally:
+            if command_failed or (
+                command_completed and self.target_domain != "cover"
+            ):
+                self._schedule_retry(desired)
             self._notify()
 
     def _source_command(
@@ -590,6 +627,7 @@ class EntityClaimController:
         new_state: State | None = event.data.get("new_state")
         if self._is_unavailable_state(new_state):
             self._source_recovery_pending = True
+            self._reset_retry()
             return
 
         actual = self._source_value(new_state)
@@ -705,6 +743,7 @@ class EntityClaimController:
     def _relinquish_scoped_session(self) -> None:
         """Give up the entire causal chain after an external operation."""
 
+        self._reset_retry()
         self._clear_pending_command()
         self._scoped.clear()
         self._persist_scoped_session()
@@ -818,6 +857,7 @@ class EntityClaimController:
                 tolerance=self.profile.tolerance,
             )
             if target_reached and not moving:
+                self._reset_retry()
                 self._clear_pending_command()
                 return True, False
             if expected_progress and (
@@ -856,6 +896,7 @@ class EntityClaimController:
                 pending.context_id,
                 tolerance=self.profile.tolerance,
             ):
+                self._reset_retry()
                 self._clear_pending_command()
                 return True, False
         if context_matches:
@@ -928,6 +969,95 @@ class EntityClaimController:
             self._cancel_pending_timer()
             self._cancel_pending_timer = None
 
+    @callback
+    def _schedule_retry(self, desired: int) -> None:
+        """Schedule another convergence attempt with domain-aware backoff."""
+
+        if (
+            not self._ready
+            or self.override_active
+            or self._is_unavailable_state(self.actual_state)
+            or (
+                self._control_policy is ControlPolicy.SCOPED
+                and not self._scoped.participants
+                and not self._scoped.restoring
+            )
+        ):
+            self._reset_retry()
+            return
+
+        if values_match(
+            desired,
+            self.actual_value,
+            tolerance=self.profile.tolerance,
+        ) and not self.source_moving:
+            self._reset_retry()
+            return
+
+        if self._retry_desired != desired:
+            self._reset_retry()
+            self._retry_desired = desired
+
+        delays = (
+            COVER_COMMAND_RETRY_DELAYS_SECONDS
+            if self.target_domain == "cover"
+            else COMMAND_RETRY_DELAYS_SECONDS
+        )
+        delay = delays[min(self._retry_attempt, len(delays) - 1)]
+        self._retry_attempt += 1
+        if self._cancel_retry_timer is not None:
+            self._cancel_retry_timer()
+        self._retry_generation += 1
+        generation = self._retry_generation
+        self._cancel_retry_timer = async_call_later(
+            self.hass,
+            delay,
+            lambda now: self._handle_retry_due(now, desired, generation),
+        )
+
+    @callback
+    def _handle_retry_due(
+        self, _now: datetime, desired: int, generation: int
+    ) -> None:
+        """Retry the latest desired value if this timer is still current."""
+
+        if (
+            generation != self._retry_generation
+            or desired != self._retry_desired
+        ):
+            return
+        self._cancel_retry_timer = None
+        if (
+            not self._ready
+            or self.override_active
+            or self._is_unavailable_state(self.actual_state)
+        ):
+            return
+        self._task_creator(
+            self.async_reconcile(
+                retry_failed_command=True,
+                retry_generation=generation,
+            ),
+            f"Retry reconciliation for {self.target_entity_id}",
+        )
+
+    @callback
+    def _cancel_retry_timer_only(self) -> None:
+        """Cancel the current timer without resetting its backoff history."""
+
+        if self._cancel_retry_timer is not None:
+            self._cancel_retry_timer()
+            self._cancel_retry_timer = None
+        self._retry_generation += 1
+
+    @callback
+    def _reset_retry(self) -> None:
+        """Cancel retries and reset convergence backoff."""
+
+        self._cancel_retry_timer_only()
+        self._retry_attempt = 0
+        self._retry_desired = None
+
     def _matches_recent_command_context(self, event: Event[Any]) -> bool:
         """Recognize delayed state reports from a superseded command."""
 
@@ -957,6 +1087,7 @@ class EntityClaimController:
         self._cancel_pending_timer = None
         self._pending_command = None
         self._recent_command_contexts[pending.context_id] = pending.expires_at
+        self._cancel_retry_timer_only()
         self._notify()
         if self._ready and not self.override_active:
             self._task_creator(
@@ -970,6 +1101,7 @@ class EntityClaimController:
     def _clear_scoped_session(self) -> None:
         """Finish or abandon a scoped session and become passive."""
 
+        self._reset_retry()
         self._clear_pending_command()
         self._scoped.clear()
         self._persist_scoped_session()
@@ -1003,6 +1135,7 @@ class EntityClaimController:
     def _start_or_refresh_override(self) -> None:
         """Suppress reconciliation until duration after the latest conflict."""
 
+        self._reset_retry()
         self._clear_pending_command()
         now = datetime.now(UTC)
         self._override_until = now + self._override_duration

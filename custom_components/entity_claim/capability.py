@@ -16,6 +16,7 @@ from homeassistant.const import ATTR_SUPPORTED_FEATURES
 from .model import ClaimKind, ClaimProfile
 
 LIGHT_MAX_BRIGHTNESS = 255
+LIGHT_BRIGHTNESS_TOLERANCE = 2
 PERCENT_MAXIMUM = 100
 COVER_POSITION_TOLERANCE = 2
 
@@ -29,7 +30,11 @@ def profile_for_source(
     if domain == "light" and brightness_supported(
         attributes.get(ATTR_SUPPORTED_COLOR_MODES)
     ):
-        return ClaimProfile(ClaimKind.BRIGHTNESS, LIGHT_MAX_BRIGHTNESS)
+        return ClaimProfile(
+            ClaimKind.BRIGHTNESS,
+            LIGHT_MAX_BRIGHTNESS,
+            tolerance=LIGHT_BRIGHTNESS_TOLERANCE,
+        )
     if domain == "fan" and supported_features & FanEntityFeature.SET_SPEED:
         step = float(attributes.get(ATTR_PERCENTAGE_STEP, 1) or 1)
         return ClaimProfile(
