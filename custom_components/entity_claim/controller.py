@@ -950,10 +950,17 @@ class EntityClaimController:
             expires_at=now + timedelta(seconds=ttl),
             purpose=purpose,
         )
+
+        @callback
+        def pending_expired(scheduled_now: datetime) -> None:
+            """Expire this command from the Home Assistant event loop."""
+
+            self._handle_pending_expired(scheduled_now, context_id)
+
         self._cancel_pending_timer = async_call_later(
             self.hass,
             ttl,
-            lambda now: self._handle_pending_expired(now, context_id),
+            pending_expired,
         )
 
     @callback
@@ -1009,10 +1016,17 @@ class EntityClaimController:
             self._cancel_retry_timer()
         self._retry_generation += 1
         generation = self._retry_generation
+
+        @callback
+        def retry_due(scheduled_now: datetime) -> None:
+            """Retry this generation from the Home Assistant event loop."""
+
+            self._handle_retry_due(scheduled_now, desired, generation)
+
         self._cancel_retry_timer = async_call_later(
             self.hass,
             delay,
-            lambda now: self._handle_retry_due(now, desired, generation),
+            retry_due,
         )
 
     @callback
@@ -1143,12 +1157,17 @@ class EntityClaimController:
         if self._cancel_override_timer is not None:
             self._cancel_override_timer()
         expected_until = self._override_until
+
+        @callback
+        def override_expired(scheduled_now: datetime) -> None:
+            """End this override from the Home Assistant event loop."""
+
+            self._handle_override_expired(scheduled_now, expected_until)
+
         self._cancel_override_timer = async_call_later(
             self.hass,
             self._override_duration.total_seconds(),
-            lambda scheduled_now: self._handle_override_expired(
-                scheduled_now, expected_until
-            ),
+            override_expired,
         )
         self._notify()
 

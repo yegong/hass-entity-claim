@@ -196,6 +196,36 @@ class MetadataTests(unittest.TestCase):
                 self.assertIn("self.schedule_update_ha_state()", source)
                 self.assertNotIn("self.async_write_ha_state()", source)
 
+    def test_delayed_callbacks_remain_on_the_event_loop(self) -> None:
+        """Timer wrappers must be marked callback before using async APIs."""
+
+        source = (INTEGRATION_DIR / "controller.py").read_text(
+            encoding="utf-8"
+        )
+        tree = ast.parse(source)
+        callback_functions = {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef)
+            and any(
+                isinstance(decorator, ast.Name)
+                and decorator.id == "callback"
+                for decorator in node.decorator_list
+            )
+        }
+        delayed_callbacks = [
+            node.args[2]
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "async_call_later"
+        ]
+        self.assertEqual(len(delayed_callbacks), 3)
+        for delayed_callback in delayed_callbacks:
+            self.assertIsInstance(delayed_callback, ast.Name)
+            assert isinstance(delayed_callback, ast.Name)
+            self.assertIn(delayed_callback.id, callback_functions)
+
     def test_config_entry_migrates_legacy_override_toggle(self) -> None:
         setup = (INTEGRATION_DIR / "__init__.py").read_text(encoding="utf-8")
         flow = (INTEGRATION_DIR / "config_flow.py").read_text(
